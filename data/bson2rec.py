@@ -19,15 +19,12 @@
 
 from __future__ import print_function
 import os
-import sys
-import io
 import csv
 
-curr_path = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.join(curr_path, "../python"))
 import mxnet as mx
 import argparse
 import cv2
+import random
 import numpy as np
 import time
 import traceback
@@ -65,7 +62,6 @@ def read_images(bson_path, csv_path):
         category_id = d['category_id']  # This won't be in Test data
         for e, pic in enumerate(d['imgs']):
             picture = pic['picture']
-            # do something with the picture, etc
             item = (idx, picture, cate_dict[category_id])
             idx += 1
             yield item  # id, picture, label, [label,]
@@ -132,14 +128,21 @@ def read_worker(args, q_in, q_out):
         image_encode(args, i, item, q_out)
 
 
-def write_worker(q_out, prefix):
+def write_worker(q_out, args):
+    random.seed(args.random_seed)
+
     pre_time = time.time()
-    fname_rec = os.path.abspath(prefix + '.rec')
-    fname_idx = os.path.abspath(prefix + '.idx')
-    record = mx.recordio.MXIndexedRecordIO(fname_idx, fname_rec, 'w')
-    count = 0
+    train_fname_rec = os.path.abspath(args.prefix + '_train.rec')
+    train_fname_idx = os.path.abspath(args.prefix + '_train.idx')
+    val_fname_rec = os.path.abspath(args.prefix + '_val.rec')
+    val_fname_idx = os.path.abspath(args.prefix + '_val.idx')
+    train_record = mx.recordio.MXIndexedRecordIO(train_fname_idx, train_fname_rec, 'w')
+    val_record = mx.recordio.MXIndexedRecordIO(val_fname_idx, val_fname_rec, 'w')
+
+    count, train_count, val_count = 0, 0, 0
     buf = {}
     more = True
+    start_time = time.time()
     while more:
         deq = q_out.get()
         if deq is not None:
@@ -151,13 +154,20 @@ def write_worker(q_out, prefix):
             s, item = buf[count]
             del buf[count]
             if s is not None:
-                record.write_idx(item[0], s)
+                if random.random() < args.val_ratio:
+                    val_record.write_idx(item[0], s)
+                    val_count += 1
+                else:
+                    train_record.write_idx(item[0], s)
+                    train_count += 1
 
-            if count % 1000 == 0:
-                cur_time = time.time()
-                print('time:', cur_time - pre_time, ' count:', count)
-                pre_time = cur_time
             count += 1
+            if count % 10000 == 0:
+                cur_time = time.time()
+                print('[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
+                    cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count, count
+                ))
+                pre_time = cur_time
 
 
 def parse_args():
@@ -169,6 +179,8 @@ def parse_args():
                         help='prefix of input/output lst and rec files.')
     parser.add_argument('--bson', type=str, required=True)
     parser.add_argument('--csv', type=str, default='/home/deploy/dylan/dataset/cdiscount/category_names.csv')
+    parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
+    parser.add_argument('--val-ratio', type=float, default=0.05)
 
     rgroup = parser.add_argument_group('Options for creating database')
     rgroup.add_argument('--pass-through', type=bool, default=False,
@@ -218,7 +230,7 @@ if __name__ == '__main__':
 
     for p in read_process:
         p.start()
-    write_process = multiprocessing.Process(target=write_worker, args=(q_out, args.prefix))
+    write_process = multiprocessing.Process(target=write_worker, args=(q_out, args))
     write_process.start()
 
     for i, item in enumerate(image_list):
@@ -233,4 +245,3 @@ if __name__ == '__main__':
 
     if not count:
         print('Did not find and list file with prefix %s' % args.prefix)
-
