@@ -28,7 +28,6 @@ import random
 import numpy as np
 import time
 import traceback
-from builtins import range
 import bson
 
 try:
@@ -42,11 +41,13 @@ def read_csv_category(csv_path):
     with open(csv_path, 'r') as reader:
         csvreader = csv.reader(reader, delimiter=',', quotechar='"')
         for i, row in enumerate(csvreader):
+            if i == 0:
+                continue
             try:
                 cateid, cate1, cate2, cate3 = row
-                cate_dict[int(cateid)] = i
-            except:
-                print('cannot parse line: {}'.format(row))
+                cate_dict[int(cateid)] = len(cate_dict)
+            except Exception as e:
+                print('cannot parse line: {}, {}'.format(row, e))
     print('read {} categories'.format(len(cate_dict)))
     return cate_dict
 
@@ -168,6 +169,11 @@ def write_worker(q_out, args):
                     cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count, count
                 ))
                 pre_time = cur_time
+
+    cur_time = time.time()
+    print('[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
+        cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count, count
+    ))
 
 
 def parse_args():

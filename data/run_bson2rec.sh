@@ -5,6 +5,6 @@ python bson2rec.py \
     --bson /home/deploy/dylan/dataset/cdiscount/train.bson \
     --csv /home/deploy/dylan/dataset/cdiscount/category_names.csv \
     --pass-through=true \
-    --num-thread 14 \
+    --num-thread 1 \
     --val-ratio 0.05
 
