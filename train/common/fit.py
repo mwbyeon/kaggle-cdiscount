@@ -1,4 +1,5 @@
 import mxnet as mx
+import mxnet.metric
 import logging
 import os
 import time
@@ -181,6 +182,7 @@ def fit(args, network, data_loader, **kwargs):
     eval_metrics = args.eval_metrics
     if args.top_k > 0:
         eval_metrics.append(mx.metric.create('top_k_accuracy', top_k=args.top_k))
+    eval_metrics.append(mx.metric.create('ce'))
 
     # callbacks that run after each batch
     batch_end_callbacks = [mx.callback.Speedometer(args.batch_size, args.disp_batches)]

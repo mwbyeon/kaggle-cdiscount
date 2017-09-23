@@ -133,14 +133,15 @@ def write_worker(q_out, args):
     random.seed(args.random_seed)
 
     pre_time = time.time()
-    train_fname_rec = os.path.abspath(args.prefix + '_train.rec')
-    train_fname_idx = os.path.abspath(args.prefix + '_train.idx')
-    val_fname_rec = os.path.abspath(args.prefix + '_val.rec')
-    val_fname_idx = os.path.abspath(args.prefix + '_val.idx')
+    train_fname_rec = os.path.abspath(args.prefix + '_train.rec.tmp')
+    train_fname_idx = os.path.abspath(args.prefix + '_train.idx.tmp')
+    val_fname_rec = os.path.abspath(args.prefix + '_val.rec.tmp')
+    val_fname_idx = os.path.abspath(args.prefix + '_val.idx.tmp')
     train_record = mx.recordio.MXIndexedRecordIO(train_fname_idx, train_fname_rec, 'w')
     val_record = mx.recordio.MXIndexedRecordIO(val_fname_idx, val_fname_rec, 'w')
 
     count, train_count, val_count = 0, 0, 0
+    train_buf = list()
     buf = {}
     more = True
     start_time = time.time()
@@ -155,12 +156,19 @@ def write_worker(q_out, args):
             s, item = buf[count]
             del buf[count]
             if s is not None:
-                if random.random() < args.val_ratio:
-                    val_record.write_idx(item[0], s)
-                    val_count += 1
-                else:
-                    train_record.write_idx(item[0], s)
-                    train_count += 1
+                train_buf.append((item[0], s))
+
+            if len(train_buf) >= 1000000:
+                print('shuffling...')
+                random.shuffle(train_buf)
+                for x in train_buf:
+                    if random.random() < args.val_ratio:
+                        val_record.write_idx(x[0], x[1])
+                        val_count += 1
+                    else:
+                        train_record.write_idx(x[0], x[1])
+                        train_count += 1
+                train_buf = list()
 
             count += 1
             if count % 10000 == 0:
@@ -169,6 +177,15 @@ def write_worker(q_out, args):
                     cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count, count
                 ))
                 pre_time = cur_time
+
+    random.shuffle(train_buf)
+    for x in train_buf:
+        if random.random() < args.val_ratio:
+            val_record.write_idx(x[0], x[1])
+            val_count += 1
+        else:
+            train_record.write_idx(x[0], x[1])
+            train_count += 1
 
     cur_time = time.time()
     print('[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
