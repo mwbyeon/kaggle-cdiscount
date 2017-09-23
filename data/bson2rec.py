@@ -59,11 +59,11 @@ def read_images(bson_path, csv_path):
 
     idx = 0
     for c, d in enumerate(data):
-        product_id = d['_id']
-        category_id = d['category_id']  # This won't be in Test data
+        product_id = d.get('_id')
+        category_id = d.get('category_id', None)  # This won't be in Test data
         for e, pic in enumerate(d['imgs']):
             picture = pic['picture']
-            item = (idx, picture, cate_dict[category_id])
+            item = (idx, picture, cate_dict[category_id] if category_id else -1)
             idx += 1
             yield item  # id, picture, label, [label,]
 
@@ -159,8 +159,9 @@ def write_worker(q_out, args):
                 train_buf.append((item[0], s))
 
             if len(train_buf) >= 1000000:
-                print('shuffling...')
-                random.shuffle(train_buf)
+                if args.shuffle:
+                    print('shuffling...')
+                    random.shuffle(train_buf)
                 for x in train_buf:
                     if random.random() < args.val_ratio:
                         val_record.write_idx(x[0], x[1])
@@ -178,7 +179,8 @@ def write_worker(q_out, args):
                 ))
                 pre_time = cur_time
 
-    random.shuffle(train_buf)
+    if args.shuffle:
+        random.shuffle(train_buf)
     for x in train_buf:
         if random.random() < args.val_ratio:
             val_record.write_idx(x[0], x[1])
@@ -203,10 +205,11 @@ def parse_args():
     parser.add_argument('--bson', type=str, required=True)
     parser.add_argument('--csv', type=str, default='/home/deploy/dylan/dataset/cdiscount/category_names.csv')
     parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
-    parser.add_argument('--val-ratio', type=float, default=0.05)
+    parser.add_argument('--val-ratio', type=float, default=0)
+    parser.add_argument('--shuffle', action='store_true')
 
     rgroup = parser.add_argument_group('Options for creating database')
-    rgroup.add_argument('--pass-through', type=bool, default=False,
+    rgroup.add_argument('--pass-through', action='store_true',
                         help='whether to skip transformation and save image as is')
     rgroup.add_argument('--resize', type=int, default=0,
                         help='resize the shorter edge of image to the newsize, original images will\
@@ -230,6 +233,7 @@ def parse_args():
                         help='Whether to also pack multi dimensional label in the record file')
     args = parser.parse_args()
     args.prefix = os.path.abspath(args.prefix)
+    print(args)
     return args
 
 

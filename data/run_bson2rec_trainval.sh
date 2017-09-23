@@ -6,5 +6,6 @@ python bson2rec.py \
     --csv /home/deploy/dylan/dataset/cdiscount/category_names.csv \
     --pass-through=true \
     --num-thread 1 \
+    --shuffle true \
     --val-ratio 0.05
 
