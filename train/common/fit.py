@@ -155,8 +155,8 @@ def fit(args, network, data_loader, **kwargs):
     if args.optimizer == 'sgd' or args.optimizer == 'nag':
         optimizer_params = {
                 'learning_rate': lr,
-                'momentum' : args.mom,
-                'wd' : args.wd,
+                'momentum': args.mom,
+                'wd': args.wd,
                 'lr_scheduler': lr_scheduler,
                 'multi_precision': True
         }
