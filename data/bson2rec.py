@@ -63,7 +63,7 @@ def read_images(bson_path, csv_path):
         category_id = d.get('category_id', None)  # This won't be in Test data
         for e, pic in enumerate(d['imgs']):
             picture = pic['picture']
-            item = (idx, picture, cate_dict[category_id] if category_id else -1)
+            item = (idx, picture, cate_dict[category_id] if category_id else idx)
             idx += 1
             yield item  # id, picture, label, [label,]
 

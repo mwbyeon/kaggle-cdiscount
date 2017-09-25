@@ -19,7 +19,10 @@ def get_fine_tune_model(symbol, arg_params, num_classes, layer_name):
     net = all_layers[layer_name+'_output']
     net = mx.symbol.FullyConnected(data=net, num_hidden=num_classes, name='fc')
     net = mx.symbol.SoftmaxOutput(data=net, name='softmax')
-    new_args = dict({k: arg_params[k] for k in arg_params if 'fc' not in k})
+    if not args.fix_last_layer:
+        new_args = dict({k: arg_params[k] for k in arg_params if 'fc' not in k})
+    else:
+        new_args = arg_params
     return (net, new_args)
 
 
@@ -34,6 +37,7 @@ if __name__ == "__main__":
                         help='the pre-trained model')
     parser.add_argument('--layer-before-fullc', type=str, default='flatten0',
                         help='the name of the layer before the last fullc layer')
+    parser.add_argument('--fix-last-layer', action='store_true')
     # use less augmentations for fine-tune
     data.set_data_aug_level(parser, 1)
     # use a small learning rate and less regularizations
@@ -44,10 +48,7 @@ if __name__ == "__main__":
 
     # load pretrained model
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    (prefix, epoch) = modelzoo.download_model(
-        args.pretrained_model, os.path.join(dir_path, 'model'))
-    if prefix is None:
-        (prefix, epoch) = (args.pretrained_model, args.load_epoch)
+    prefix, epoch = (args.pretrained_model, args.load_epoch)
     sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
 
     # remove the last fullc layer
