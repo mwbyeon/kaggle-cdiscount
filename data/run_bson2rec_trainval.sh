@@ -7,5 +7,6 @@ python bson2rec.py \
     --pass-through \
     --num-thread 1 \
     --shuffle \
+    --cut-off 5270 \
+    --under-sampling 10000 \
     --val-ratio 0.05
-

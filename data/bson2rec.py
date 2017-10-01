@@ -1,25 +1,10 @@
 # -*- coding: utf-8 -*-
 
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-
 from __future__ import print_function
 import os
+import sys
 import csv
+from operator import itemgetter
 
 import mxnet as mx
 import argparse
@@ -29,6 +14,8 @@ import numpy as np
 import time
 import traceback
 import bson
+from collections import Counter
+from tqdm import tqdm
 
 try:
     import multiprocessing
@@ -36,36 +23,75 @@ except ImportError:
     multiprocessing = None
 
 
-def read_csv_category(csv_path):
+def read_csv_category(csv_path, category_filter=None):
     cate_dict = dict()
     with open(csv_path, 'r') as reader:
-        csvreader = csv.reader(reader, delimiter=',', quotechar='"')
-        for i, row in enumerate(csvreader):
+        csv_reader = csv.reader(reader, delimiter=',', quotechar='"')
+        for i, row in enumerate(csv_reader):
             if i == 0:
                 continue
             try:
                 cateid, cate1, cate2, cate3 = row
-                cate_dict[int(cateid)] = len(cate_dict)
+                cateid = int(cateid)
+                if category_filter is None or cateid in category_filter:
+                    cate_dict[cateid] = len(cate_dict)
             except Exception as e:
                 print('cannot parse line: {}, {}'.format(row, e))
     print('read {} categories'.format(len(cate_dict)))
+
+    map_csv_path = os.path.abspath(args.prefix + '_c%s_map.csv' % len(cate_dict))
+    with open(map_csv_path, 'w') as writer:
+        writer.write('category_id,class_id\n')
+        for k, v in cate_dict.items():
+            writer.write('{},{}\n'.format(k, v))
     return cate_dict
 
 
-def read_images(bson_path, csv_path):
-    cate_dict = read_csv_category(csv_path)
+def analyze_bson(bson_path):
+    data = bson.decode_file_iter(open(bson_path, 'rb'))
+
+    counter = Counter()
+    for i, d in tqdm(enumerate(data)):
+        product_id = d.get('_id')
+        category_id = d.get('category_id', None)  # This won't be in Test data
+        counter[category_id] += 1
+
+    items = sorted(counter.items(), key=itemgetter(1), reverse=True)
+    total = sum(counter.values())
+    accum = 0
+    for i, x in enumerate(items):
+        accum += x[1]
+        print('[{0:3d}]\t{1:d}\t{2:5d}\t{3:2.6f}\t{4:2.6f}'.format(i, x[0], x[1], 100 * x[1] / total,
+                                                                   100 * accum / total))
+    return counter
+
+
+def read_images(bson_path, csv_path, top_category):
+    cate_dict = read_csv_category(csv_path, top_category)
 
     data = bson.decode_file_iter(open(bson_path, 'rb'))
 
     idx = 0
-    for c, d in enumerate(data):
+    category_counter = Counter()
+
+    for i, d in enumerate(data):
         product_id = d.get('_id')
         category_id = d.get('category_id', None)  # This won't be in Test data
+        if category_id not in cate_dict:
+            continue
+
         for e, pic in enumerate(d['imgs']):
             picture = pic['picture']
-            item = (idx, picture, cate_dict[category_id] if category_id else idx)
-            idx += 1
-            yield item  # id, picture, label, [label,]
+            item = None
+            if category_id is None:  # Test Data
+                item = (idx, picture, idx)
+            elif category_counter[category_id] < args.under_sampling:
+                item = (idx, picture, cate_dict[category_id])
+                category_counter[category_id] += 1
+
+            if item is not None:
+                idx += 1
+                yield item  # id, picture, label, [label,]
 
 
 def image_encode(args, i, item, q_out):
@@ -174,9 +200,11 @@ def write_worker(q_out, args):
             count += 1
             if count % 10000 == 0:
                 cur_time = time.time()
-                print('[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
-                    cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count, count
-                ))
+                print(
+                    '[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
+                        cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count,
+                        val_count / count, count
+                    ))
                 pre_time = cur_time
 
     if args.shuffle:
@@ -190,9 +218,11 @@ def write_worker(q_out, args):
             train_count += 1
 
     cur_time = time.time()
-    print('[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
-        cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count, count
-    ))
+    print(
+        '[{6:10d}] elapsed_time: {0:.3f}, step_time:{1:.3f}, train_count: {2}({3:.3f}), val_count: {4}({5:.3f})'.format(
+            cur_time - start_time, cur_time - pre_time, train_count, train_count / count, val_count, val_count / count,
+            count
+        ))
 
 
 def parse_args():
@@ -207,6 +237,8 @@ def parse_args():
     parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
     parser.add_argument('--val-ratio', type=float, default=0)
     parser.add_argument('--shuffle', action='store_true')
+    parser.add_argument('--cut-off', type=int, default=100000)
+    parser.add_argument('--under-sampling', type=int, default=100000)
 
     rgroup = parser.add_argument_group('Options for creating database')
     rgroup.add_argument('--pass-through', action='store_true',
@@ -243,11 +275,12 @@ if __name__ == '__main__':
     if os.path.isdir(args.prefix):
         raise ValueError('args.prefix is not file prefix')
 
-    count = 0
+    print('Analyze data file...')
+    counter = analyze_bson(args.bson)
 
     print('Creating .rec file from', args.bson)
-    count += 1
-    image_list = read_images(args.bson, args.csv)
+    top_category = [x[0] for x in counter.most_common(args.cut_off)]
+    image_list = read_images(args.bson, args.csv, top_category)
     # -- write_record -- #
     q_in = [multiprocessing.Queue(1024) for i in range(args.num_thread)]
     q_out = multiprocessing.Queue(1024)
@@ -269,6 +302,3 @@ if __name__ == '__main__':
 
     q_out.put(None)
     write_process.join()
-
-    if not count:
-        print('Did not find and list file with prefix %s' % args.prefix)
