@@ -133,7 +133,7 @@ def _predict(args):
 
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PULL)
-    zmq_socket.set_hwm(1)
+    zmq_socket.set_hwm(args.batch_size)
     zmq_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
     logging.info('tester started (port: {port})'.format(port=args.zmq_port+1))
 
@@ -201,7 +201,7 @@ def _processor(args):
     logging.info('processor started')
 
     ext_socket = context.socket(zmq.PUSH)
-    ext_socket.set_hwm(1)
+    ext_socket.set_hwm(args.batch_size)
     ext_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
 
     while True:
@@ -213,6 +213,7 @@ def _processor(args):
         images = []
         for _, img_bytes, class_id in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = np.swapaxes(img, 0, 2)
             img = np.swapaxes(img, 1, 2)
             # img = np.expand_dims(img, axis=0)
