@@ -171,7 +171,6 @@ def _predict(args):
             __t3 = time.time()
             logging.info('[{4:8d}] batch:{0:.3f}, forward:{1:.3f}, write:{2:.3f} ({3:.3f}/s)'.format(
                 __t1-__t0, __t2-__t1, __t3-__t2, args.batch_size / (__t3-__t0), product_count))
-            __t0 = time.time()
 
             batch_ids[:] = []
 
@@ -180,6 +179,7 @@ def _predict(args):
                     batch_data[len(batch_ids)] = img
                     batch_ids.append(class_id)
                 product_count += 1
+            __t0 = time.time()
 
     __t1 = time.time()
     probs_dict = _do_forward(tester, batch_data, batch_ids)
