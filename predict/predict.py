@@ -59,10 +59,8 @@ def read_images(bson_path, csv_path):
 
 
 class Tester(object):
-    def __init__(self, symbol_path, params_path, data_shape, device_type='gpu', gpus='0'):
-        self._symbol = mx.symbol.load(symbol_path)
+    def __init__(self, symbol_path, params_path, data_shape, mean_max_pooling=False, pool_name=None, fc_name=None, device_type='gpu', gpus='0'):
         self._data_shape = data_shape
-
         self._arg_params, self._aux_params = {}, {}
         save_dict = mx.nd.load(params_path)
         for k, v in save_dict.items():
@@ -71,6 +69,43 @@ class Tester(object):
                 self._arg_params[name] = v
             if tp == 'aux':
                 self._aux_params[name] = v
+
+        if mean_max_pooling:
+            sym_softmax = mx.symbol.load(symbol_path)
+            sym_pool, sym_fc = None, None
+            for x in sym_softmax.get_internals():
+                if x.name == pool_name:
+                    sym_pool = x
+                elif x.name == fc_name:
+                    sym_fc = x
+
+            if sym_pool is None or sym_fc is None:
+                print( [x.name for x in sym_softmax.get_internals()])
+                if sym_pool is None:
+                    raise ValueError('Cannot find output that matches name {}'.format(sym_pool))
+                if sym_fc is None:
+                    raise ValueError('Cannot find output that matches name {}'.format(sym_fc))
+
+            num_classes = sym_fc.attr('num_hidden')
+
+            sym = mx.symbol.Convolution(data=sym_pool, num_filter=num_classes, kernel=(1, 1), no_bias=False, name=fc_name)
+            fc_weight_name, fc_bias_name = fc_name + '_weight', fc_name + '_bias'
+            fc_weight, fc_bias = self._arg_params[fc_weight_name], self._arg_params[fc_bias_name]
+            self._arg_params[fc_weight_name] = fc_weight.reshape(fc_weight.shape + (1, 1))
+            self._arg_params[fc_bias_name] = fc_bias.reshape(fc_bias.shape)
+
+            mean_max_pooling_size = tuple([max(i // 32 - 6, 1) for i in data_shape[2:4]])
+            print('mean_max_pooling_size', mean_max_pooling_size)
+
+            sym1 = mx.symbol.Flatten(data=mx.symbol.Pooling(
+                data=sym, global_pool=True, pool_type='avg', kernel=mean_max_pooling_size, stride=(1, 1), pad=(0, 0), name='out_pool1'))
+            sym2 = mx.symbol.Flatten(data=mx.symbol.Pooling(
+                data=sym, global_pool=True, pool_type='max', kernel=mean_max_pooling_size, stride=(1, 1), pad=(0, 0), name='out_pool2'))
+            sym = (sym1 + sym2) * 0.5
+            sym = mx.symbol.SoftmaxOutput(data=sym, name='softmax')
+            self._symbol = sym
+        else:
+            self._symbol = mx.symbol.load(symbol_path)
 
         ctx = [mx.gpu(int(x)) for x in gpus.split(',')] if device_type == 'gpu' else mx.cpu()
 
@@ -129,7 +164,9 @@ def _predict(args):
     data_shape = [int(x) for x in args.data_shape.split(',')]
     batch_shape = [args.batch_size] + data_shape
     logging.info('batch_shape: {}'.format(batch_shape))
-    tester = Tester(args.symbol, args.params, batch_shape, gpus=args.gpus)
+    tester = Tester(args.symbol, args.params, batch_shape,
+                    mean_max_pooling=args.mean_max_pooling, pool_name=args.pool_name, fc_name=args.fc_name,
+                    gpus=args.gpus)
 
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PULL)
@@ -247,6 +284,10 @@ if __name__ == '__main__':
     parser.add_argument('--gpus', type=str, default='0')
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18313)
+
+    parser.add_argument('--mean-max-pooling', action='store_true')
+    parser.add_argument('--pool-name', type=str, default='pool1')
+    parser.add_argument('--fc-name', type=str, default='fc')
 
     parser.add_argument('--output', type=argparse.FileType('w'), required=True)
     args = parser.parse_args()
