@@ -10,7 +10,5 @@ python3 -u predict.py \
     --data-shape    3,180,180 \
     --gpus          0,1,2,3,4,5,6,7 \
     --num-procs     24 \
-    --mean-max-pooling \
-    --pool-name     pool1 \
-    --fc-name       fc \
-    --output        output_resnext101_e11_mmp.csv
+    --multi-view    1 \
+    --output        output_resnext101_e11_mv1.csv

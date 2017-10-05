@@ -71,6 +71,7 @@ class Tester(object):
                 self._aux_params[name] = v
 
         if mean_max_pooling:
+            logging.info('Add Mean-Max Pooling Layer..')
             sym_softmax = mx.symbol.load(symbol_path)
             sym_pool, sym_fc = None, None
             for x in sym_softmax.get_internals():
@@ -95,7 +96,6 @@ class Tester(object):
             self._arg_params[fc_bias_name] = fc_bias.reshape(fc_bias.shape)
 
             mean_max_pooling_size = tuple([max(i // 32 - 6, 1) for i in data_shape[2:4]])
-            print('mean_max_pooling_size', mean_max_pooling_size)
 
             sym1 = mx.symbol.Flatten(data=mx.symbol.Pooling(
                 data=sym, global_pool=True, pool_type='avg', kernel=mean_max_pooling_size, stride=(1, 1), pad=(0, 0), name='out_pool1'))
@@ -230,6 +230,12 @@ def _predict(args):
     logging.info('tester finished (product_count:{})'.format(product_count))
 
 
+def _hwc_to_chw(img):
+    img = np.swapaxes(img, 0, 2)
+    img = np.swapaxes(img, 1, 2)
+    return img
+
+
 def _processor(args):
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PULL)
@@ -251,10 +257,10 @@ def _processor(args):
         for _, img_bytes, class_id in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = np.swapaxes(img, 0, 2)
-            img = np.swapaxes(img, 1, 2)
-            # img = np.expand_dims(img, axis=0)
-            images.append((img, class_id))
+            images.append((_hwc_to_chw(img), class_id))
+            if args.multi_view >= 1:
+                img_flip = cv2.flip(img, flipCode=1)
+                images.append((_hwc_to_chw(img_flip), class_id))
         ext_socket.send_pyobj(images)
 
 
@@ -284,6 +290,8 @@ if __name__ == '__main__':
     parser.add_argument('--gpus', type=str, default='0')
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18313)
+
+    parser.add_argument('--multi-view', type=int, default=0)
 
     parser.add_argument('--mean-max-pooling', action='store_true')
     parser.add_argument('--pool-name', type=str, default='pool1')
