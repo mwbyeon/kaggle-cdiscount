@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
-import os
 import time
 import csv
+import hashlib
 import logging
 import coloredlogs
+import pickle
 from multiprocessing import Process
 coloredlogs.install(level=logging.INFO, milliseconds=True)
 
@@ -15,7 +16,6 @@ import numpy as np
 import cv2
 import bson
 import zmq
-from tqdm import tqdm
 
 Batch = namedtuple('Batch', ['data'])
 
@@ -139,16 +139,24 @@ def _reader(args):
     logging.info('reader finished (product: {})'.format(product_count))
 
 
-def _do_forward(tester, batch_data, batch_ids):
+def _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict=None, cate2cid=None):
     output = tester.get_output(batch_data)
     probs_dict = dict()
     probs = output[0].asnumpy()
     for i, _id in enumerate(batch_ids):
         if _id is not None:
+            p = probs[i]
+            if md5_dict:
+                assert isinstance(cate2cid, dict)
+                h = hashlib.md5(batch_raw[i]).hexdigest()
+                if h in md5_dict:
+                    p = np.zeros(probs.shape[1:])
+                    p[cate2cid[md5_dict[h]]] = 1.0
+
             if _id in probs_dict:
-                probs_dict[_id] += probs[i]
+                probs_dict[_id] += p
             else:
-                probs_dict[_id] = probs[i]
+                probs_dict[_id] = p
     return probs_dict
 
 
@@ -159,7 +167,8 @@ def _write_output(args, probs_dict, cid2cate):
 
 
 def _predict(args):
-    _, cid2cate = read_csv_category(args.csv)
+    cate2cid, cid2cate = read_csv_category(args.csv)
+    md5_dict = pickle.load(open(args.md5_dict_pkl, 'rb')) if args.md5_dict_pkl else None
 
     data_shape = [int(x) for x in args.data_shape.split(',')]
     batch_shape = [args.batch_size] + data_shape
@@ -178,7 +187,7 @@ def _predict(args):
 
     __t0 = time.time()
     batch_data = np.zeros(batch_shape)
-    batch_ids = []
+    batch_ids, batch_raw = [], []
     term_count = 0
     product_count = 0
 
@@ -193,16 +202,17 @@ def _predict(args):
 
         pad_forward = False
         if len(images) + len(batch_ids) <= args.batch_size:
-            for img, class_id in images:
+            for img, class_id, raw in images:
                 batch_data[len(batch_ids)] = img
                 batch_ids.append(class_id)
+                batch_raw.append(raw)
             product_count += 1
         else:
             pad_forward = True
 
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
-            probs_dict = _do_forward(tester, batch_data, batch_ids)
+            probs_dict = _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
             __t2 = time.time()
             _write_output(args, probs_dict, cid2cate)
             __t3 = time.time()
@@ -210,16 +220,18 @@ def _predict(args):
                 __t1-__t0, __t2-__t1, __t3-__t2, args.batch_size / (__t3-__t0), product_count))
 
             batch_ids[:] = []
+            batch_raw[:] = []
 
             if pad_forward and images:
-                for img, class_id in images:
+                for img, class_id, raw in images:
                     batch_data[len(batch_ids)] = img
                     batch_ids.append(class_id)
+                    batch_raw.append(raw)
                 product_count += 1
             __t0 = time.time()
 
     __t1 = time.time()
-    probs_dict = _do_forward(tester, batch_data, batch_ids)
+    probs_dict = _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
     __t2 = time.time()
     _write_output(args, probs_dict, cid2cate)
     __t3 = time.time()
@@ -257,10 +269,10 @@ def _processor(args):
         for _, img_bytes, class_id in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            images.append((_hwc_to_chw(img), class_id))
+            images.append((_hwc_to_chw(img), class_id, img_bytes))
             if args.multi_view >= 1:
                 img_flip = cv2.flip(img, flipCode=1)
-                images.append((_hwc_to_chw(img_flip), class_id))
+                images.append((_hwc_to_chw(img_flip), class_id, img_bytes))
         ext_socket.send_pyobj(images)
 
 
@@ -290,6 +302,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpus', type=str, default='0')
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18313)
+    parser.add_argument('--md5-dict-pkl', type=str, default=None)
 
     parser.add_argument('--multi-view', type=int, default=0)
 
