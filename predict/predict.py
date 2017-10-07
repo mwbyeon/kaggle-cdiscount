@@ -9,7 +9,7 @@ import pickle
 from multiprocessing import Process
 coloredlogs.install(level=logging.INFO, milliseconds=True)
 
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 
 import mxnet as mx
 import numpy as np
@@ -20,46 +20,9 @@ import zmq
 Batch = namedtuple('Batch', ['data'])
 
 
-def read_csv_category(csv_path):
-    cate2cid, cid2cate = dict(), dict()
-    with open(csv_path, 'r') as reader:
-        csvreader = csv.reader(reader, delimiter=',', quotechar='"')
-        for i, row in enumerate(csvreader):
-            if i == 0:
-                continue
-            try:
-                cateid, cate1, cate2, cate3 = row
-                cid = len(cate2cid)
-                cate2cid[int(cateid)] = cid
-                cid2cate[cid] = int(cateid)
-            except Exception as e:
-                print('cannot parse line: {}, {}'.format(row, e))
-    print('read {} categories'.format(len(cate2cid)))
-    return cate2cid, cid2cate
-
-
-def read_images(bson_path, csv_path):
-    cate_dict, _ = read_csv_category(csv_path)
-
-    data = bson.decode_file_iter(open(bson_path, 'rb'))
-
-    product_count, image_count = 0, 0
-    for c, d in enumerate(data):
-        product_id = d.get('_id')
-        category_id = d.get('category_id', None)  # This won't be in Test data
-        items = []
-        for e, pic in enumerate(d['imgs']):
-            picture = pic['picture']
-            item = (image_count, picture, cate_dict[category_id] if category_id else product_id)
-            items.append(item)
-            image_count += 1
-        product_count += 1
-        yield items  # list of [id, picture, label, [label,]]
-    logging.info('read finished (product:{}, image:{})'.format(product_count, image_count))
-
-
 class Tester(object):
-    def __init__(self, symbol_path, params_path, data_shape, mean_max_pooling=False, pool_name=None, fc_name=None, device_type='gpu', gpus='0'):
+    def __init__(self, symbol_path, params_path, data_shape,
+                 mean_max_pooling=False, pool_name=None, fc_name=None, device_type='gpu', gpus='0'):
         self._data_shape = data_shape
         self._arg_params, self._aux_params = {}, {}
         save_dict = mx.nd.load(params_path)
@@ -121,7 +84,46 @@ class Tester(object):
         return output
 
 
-def _reader(args):
+def category_csv_to_dict(category_csv):
+    cate2cid, cid2cate = dict(), dict()
+    with open(category_csv, 'r') as reader:
+        csvreader = csv.reader(reader, delimiter=',', quotechar='"')
+        for i, row in enumerate(csvreader):
+            if i == 0:
+                continue
+            try:
+                cateid, cate1, cate2, cate3 = row
+                cid = len(cate2cid)
+                cate2cid[int(cateid)] = cid
+                cid2cate[cid] = int(cateid)
+            except Exception as e:
+                logging.error('cannot parse line: {}, {}'.format(row, e))
+    logging.info('{} categories in {}'.format(len(cate2cid), category_csv))
+    return cate2cid, cid2cate
+
+
+def read_images(bson_path, csv_path):
+    cate_dict, _ = category_csv_to_dict(csv_path)
+
+    with open(bson_path, 'rb') as reader:
+        data = bson.decode_file_iter(reader)
+
+        product_count, image_count = 0, 0
+        for c, d in enumerate(data):
+            product_id = d.get('_id')
+            category_id = d.get('category_id', None)  # This won't be in Test data
+            items = []
+            for e, pic in enumerate(d['imgs']):
+                picture = pic['picture']
+                item = (image_count, picture, product_id)
+                items.append(item)
+                image_count += 1
+            product_count += 1
+            yield items  # list of [id, picture, label, [label,]]
+    logging.info('read finished (product:{}, image:{})'.format(product_count, image_count))
+
+
+def _func_reader(args):
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PUSH)
     zmq_socket.set_hwm(1)
@@ -160,15 +162,12 @@ def _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict=None, cate2ci
     return probs_dict
 
 
-def _write_output(args, probs_dict, cid2cate):
-    for _id, prob in probs_dict.items():
-        args.output.write('{0:d},{1:d}\n'.format(_id, cid2cate[int(np.argmax(prob))]))
-        args.output.flush()
-
-
-def _predict(args):
-    cate2cid, cid2cate = read_csv_category(args.csv)
+def _func_predict(args):
+    cate2cid, cid2cate = category_csv_to_dict(args.csv)
     md5_dict = pickle.load(open(args.md5_dict_pkl, 'rb')) if args.md5_dict_pkl else None
+    with open(args.bson, 'rb') as reader:
+        ground_truths = dict((d.get('_id'), d.get('category_id')) for d in bson.decode_file_iter(reader))
+    logging.info('ground_truths: {}'.format(len(ground_truths)))
 
     data_shape = [int(x) for x in args.data_shape.split(',')]
     batch_shape = [args.batch_size] + data_shape
@@ -178,22 +177,25 @@ def _predict(args):
                     gpus=args.gpus)
 
     context = zmq.Context()
-    zmq_socket = context.socket(zmq.PULL)
-    zmq_socket.set_hwm(args.batch_size)
-    zmq_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
+    ext_socket = context.socket(zmq.PULL)
+    ext_socket.set_hwm(args.batch_size)
+    ext_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
     logging.info('tester started (port: {port})'.format(port=args.zmq_port+1))
 
-    args.output.write('_id,category_id\n')  # header
+    writer = open(args.output, 'w') if args.output else None
+    if writer:
+        writer.write('_id,category_id\n')  # csv header
 
     __t0 = time.time()
     batch_data = np.zeros(batch_shape)
     batch_ids, batch_raw = [], []
     term_count = 0
     product_count = 0
+    correct_count = 0
 
     finished = False
     while not finished:
-        images = zmq_socket.recv_pyobj()
+        images = ext_socket.recv_pyobj()
         if images is None:
             term_count += 1
             if term_count == args.num_procs:
@@ -202,9 +204,9 @@ def _predict(args):
 
         pad_forward = False
         if len(images) + len(batch_ids) <= args.batch_size:
-            for img, class_id, raw in images:
+            for img, product_id, raw in images:
                 batch_data[len(batch_ids)] = img
-                batch_ids.append(class_id)
+                batch_ids.append(product_id)
                 batch_raw.append(raw)
             product_count += 1
         else:
@@ -214,10 +216,17 @@ def _predict(args):
             __t1 = time.time()
             probs_dict = _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
             __t2 = time.time()
-            _write_output(args, probs_dict, cid2cate)
+            for _id, prob in probs_dict.items():
+                pred = cid2cate[int(np.argmax(prob))]
+                if ground_truths[_id] == pred:
+                    correct_count += 1
+                if writer:
+                    writer.write('{0:d},{1:d}\n'.format(_id, pred))
+                    writer.flush()
             __t3 = time.time()
-            logging.info('[{4:8d}] batch:{0:.3f}, forward:{1:.3f}, write:{2:.3f} ({3:.3f}/s)'.format(
-                __t1-__t0, __t2-__t1, __t3-__t2, args.batch_size / (__t3-__t0), product_count))
+            logging.info('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
+                product_count, correct_count / product_count,
+                __t1-__t0, __t2-__t1, __t3-__t2, args.batch_size / (__t3-__t0)))
 
             batch_ids[:] = []
             batch_raw[:] = []
@@ -233,13 +242,21 @@ def _predict(args):
     __t1 = time.time()
     probs_dict = _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
     __t2 = time.time()
-    _write_output(args, probs_dict, cid2cate)
+    for _id, prob in probs_dict.items():
+        pred = cid2cate[int(np.argmax(prob))]
+        if ground_truths[_id] == pred:
+            correct_count += 1
+        if writer:
+            writer.write('{0:d},{1:d}\n'.format(_id, pred))
+            writer.flush()
     __t3 = time.time()
-    logging.info('[{4:8d}] batch:{0:.3f}, forward:{1:.3f}, write:{2:.3f} ({3:.3f}/s)'.format(
-        __t1 - __t0, __t2 - __t1, __t3 - __t2, args.batch_size / (__t3 - __t0), product_count))
-    __t0 = time.time()
+    logging.info('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
+        product_count, correct_count / product_count,
+        __t1 - __t0, __t2 - __t1, __t3 - __t2, args.batch_size / (__t3 - __t0)))
 
-    logging.info('tester finished (product_count:{})'.format(product_count))
+    logging.info('tester finished (product_count:{0}, accuracy={1:.6f})'.format(
+        product_count, correct_count / product_count))
+    writer.close()
 
 
 def _hwc_to_chw(img):
@@ -248,7 +265,7 @@ def _hwc_to_chw(img):
     return img
 
 
-def _processor(args):
+def _func_processor(args):
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PULL)
     zmq_socket.set_hwm(0)
@@ -266,20 +283,20 @@ def _processor(args):
             ext_socket.send_pyobj(None)
             return
         images = []
-        for _, img_bytes, class_id in items:
+        for _, img_bytes, product_id in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            images.append((_hwc_to_chw(img), class_id, img_bytes))
+            images.append((_hwc_to_chw(img), product_id, img_bytes))
             if args.multi_view >= 1:
                 img_flip = cv2.flip(img, flipCode=1)
-                images.append((_hwc_to_chw(img_flip), class_id, img_bytes))
+                images.append((_hwc_to_chw(img_flip), product_id, img_bytes))
         ext_socket.send_pyobj(images)
 
 
 def main(args):
-    proc_reader = Process(target=_reader, args=(args,))
-    proc_predict = Process(target=_predict, args=(args,))
-    proc_processors = [Process(target=_processor, args=(args,)) for _ in range(args.num_procs)]
+    proc_reader = Process(target=_func_reader, args=(args,))
+    proc_predict = Process(target=_func_predict, args=(args,))
+    proc_processors = [Process(target=_func_processor, args=(args,)) for _ in range(args.num_procs)]
 
     proc_reader.start()
     proc_predict.start()
@@ -301,16 +318,16 @@ if __name__ == '__main__':
     parser.add_argument('--data-shape', type=str, required=True)
     parser.add_argument('--gpus', type=str, default='0')
     parser.add_argument('--num-procs', type=int, default=1)
-    parser.add_argument('--zmq-port', type=int, default=18313)
-    parser.add_argument('--md5-dict-pkl', type=str, default=None)
+    parser.add_argument('--zmq-port', type=int, default=18300)
 
+    parser.add_argument('--md5-dict-pkl', type=str, default=None)
     parser.add_argument('--multi-view', type=int, default=0)
 
     parser.add_argument('--mean-max-pooling', action='store_true')
     parser.add_argument('--pool-name', type=str, default='pool1')
     parser.add_argument('--fc-name', type=str, default='fc')
 
-    parser.add_argument('--output', type=argparse.FileType('w'), required=True)
+    parser.add_argument('--output', type=str)
     args = parser.parse_args()
 
     main(args)
