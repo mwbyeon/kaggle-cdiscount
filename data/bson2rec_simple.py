@@ -4,6 +4,7 @@ import csv
 import os
 import hashlib
 import pickle
+import random
 import logging
 import coloredlogs
 coloredlogs.install(level=logging.INFO)
@@ -92,11 +93,29 @@ def main(args):
     logging.info('write rec file to {}'.format(args.out_rec))
     rec_writer = mx.recordio.MXRecordIO(args.out_rec, 'w')
     count = 0
+    random.seed(args.random_seed)
+    images_buf = []
     for item in tqdm(read_images(args), unit='images'):
         header = mx.recordio.IRHeader(0, item[2], item[0], 0)
         rec = mx.recordio.pack(header, item[1])
-        rec_writer.write(rec)
+        images_buf.append(rec)
+        if len(images_buf) >= args.shuffle_size:
+            logging.info('shuffle {} images'.format(len(images_buf)))
+            item_perm = [i for i in range(len(images_buf))]
+            random.shuffle(item_perm)
+            logging.info('write {} images'.format(len(images_buf)))
+            for i in tqdm(item_perm, total=len(item_perm), unit='images', desc='write to rec file'):
+                rec_writer.write(images_buf[i])
+            images_buf = []
         count += 1
+
+    logging.info('shuffle {} images'.format(len(images_buf)))
+    item_perm = [i for i in range(len(images_buf))]
+    random.shuffle(item_perm)
+    logging.info('write {} images'.format(len(images_buf)))
+    for i in tqdm(item_perm, total=len(item_perm), unit='images', desc='write to rec file'):
+        rec_writer.write(images_buf[i])
+
     rec_writer.close()
     logging.info('complete. {} images'.format(count))
 
@@ -108,6 +127,8 @@ if __name__ == '__main__':
     parser.add_argument('--category-csv', type=str, required=True)
     parser.add_argument('--out-rec', type=str, required=True)
     parser.add_argument('--md5-dict-pkl', type=str, default=None)
+    parser.add_argument('--shuffle-size', type=int, default=99999999)
+    parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
     parser.add_argument('--unique-md5', action='store_true')
     parser.add_argument('--under-sampling', type=int, default=99999999)
     args = parser.parse_args()
