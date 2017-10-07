@@ -8,5 +8,5 @@ python bson2rec.py \
     --num-thread 1 \
     --shuffle \
     --cut-off 5270 \
-    --under-sampling 10000 \
+    --under-sampling 999999 \
     --val-ratio 0.05

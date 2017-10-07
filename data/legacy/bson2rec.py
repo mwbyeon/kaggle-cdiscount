@@ -1,50 +1,38 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
 import os
-import sys
 import csv
+import hashlib
 from operator import itemgetter
-
-import mxnet as mx
-import argparse
-import cv2
 import random
-import numpy as np
 import time
 import traceback
+import multiprocessing
+
+import mxnet as mx
+import cv2
+import numpy as np
 import bson
 from collections import Counter
 from tqdm import tqdm
 
-try:
-    import multiprocessing
-except ImportError:
-    multiprocessing = None
 
-
-def read_csv_category(csv_path, category_filter=None):
-    cate_dict = dict()
+def category_csv_to_dict(csv_path):
+    cate2cid, cid2cate = dict(), dict()
     with open(csv_path, 'r') as reader:
-        csv_reader = csv.reader(reader, delimiter=',', quotechar='"')
-        for i, row in enumerate(csv_reader):
+        csvreader = csv.reader(reader, delimiter=',', quotechar='"')
+        for i, row in enumerate(csvreader):
             if i == 0:
                 continue
             try:
                 cateid, cate1, cate2, cate3 = row
-                cateid = int(cateid)
-                if category_filter is None or cateid in category_filter:
-                    cate_dict[cateid] = len(cate_dict)
+                cid = len(cate2cid)
+                cate2cid[int(cateid)] = cid
+                cid2cate[cid] = int(cateid)
             except Exception as e:
                 print('cannot parse line: {}, {}'.format(row, e))
-    print('read {} categories'.format(len(cate_dict)))
-
-    map_csv_path = os.path.abspath(args.prefix + '_c%s_map.csv' % len(cate_dict))
-    with open(map_csv_path, 'w') as writer:
-        writer.write('category_id,class_id\n')
-        for k, v in cate_dict.items():
-            writer.write('{},{}\n'.format(k, v))
-    return cate_dict
+    print('read {} categories'.format(len(cate2cid)))
+    return cate2cid, cid2cate
 
 
 def analyze_bson(bson_path):
@@ -67,7 +55,7 @@ def analyze_bson(bson_path):
 
 
 def read_images(bson_path, csv_path, top_category):
-    cate_dict = read_csv_category(csv_path, top_category)
+    cate_dict = category_csv_to_dict(csv_path, top_category)
 
     data = bson.decode_file_iter(open(bson_path, 'rb'))
 
@@ -226,6 +214,7 @@ def write_worker(q_out, args):
 
 
 def parse_args():
+    import argparse
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description='Create an image list or \
@@ -235,10 +224,10 @@ def parse_args():
     parser.add_argument('--bson', type=str, required=True)
     parser.add_argument('--csv', type=str, default='/home/deploy/dylan/dataset/cdiscount/category_names.csv')
     parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
-    parser.add_argument('--val-ratio', type=float, default=0)
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--cut-off', type=int, default=100000)
     parser.add_argument('--under-sampling', type=int, default=100000)
+    parser.add_argument('--md5-dict-pkl', type=str, default=None)
 
     rgroup = parser.add_argument_group('Options for creating database')
     rgroup.add_argument('--pass-through', action='store_true',
