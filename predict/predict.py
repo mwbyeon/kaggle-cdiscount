@@ -113,11 +113,15 @@ def read_images(bson_path, csv_path):
             product_id = d.get('_id')
             category_id = d.get('category_id', None)  # This won't be in Test data
             items = []
+            prod_md5_set = set()
             for e, pic in enumerate(d['imgs']):
-                picture = pic['picture']
-                item = (image_count, picture, product_id)
-                items.append(item)
-                image_count += 1
+                img_bytes = pic['picture']
+                h = hashlib.md5(img_bytes).hexdigest()
+                if h not in prod_md5_set:
+                    prod_md5_set.add(h)
+                    item = (image_count, img_bytes, product_id)
+                    items.append(item)
+                    image_count += 1
             product_count += 1
             yield items  # list of [id, picture, label, [label,]]
     logging.info('read finished (product:{}, image:{})'.format(product_count, image_count))
