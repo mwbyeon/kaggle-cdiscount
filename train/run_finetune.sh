@@ -9,19 +9,19 @@ MODEL=resnext-101
 MXNET_CUDNN_AUTOTUNE_DEFAULT=0 python3 -u fine-tune.py \
     --gpus              0,1,2,3,4,5,6,7 \
     --kv-store          device \
-    --pretrained-model  ${ROOT}/train/checkpoints/${MODEL}/imagenet1k-${MODEL} \
-    --model-prefix      ${ROOT}/train/checkpoints/${MODEL}/imagenet1k-${MODEL} \
-    --fix-last-layer \
+    --pretrained-model  ${ROOT}/train/model/imagenet1k-${MODEL} \
+    --model-prefix      ${ROOT}/train/checkpoints/${MODEL}-newset/imagenet1k-${MODEL} \
     --data-train        ${ROOT}/data/refined_train.rec \
     --data-val          ${ROOT}/data/refined_val.rec \
     --image-shape       3,180,180 \
     --data-nthread      6 \
-    --optimizer         adam \
-    --lr                0.0005 \
+    --optimizer         nag \
+    --lr                0.02 \
     --lr-factor         0.2 \
-    --lr-step-epochs    8,18,20 \
+    --lr-step-epochs    8,16,20 \
+    --disp-batches      100 \
     --num-epoch         20 \
-    --load-epoch        16 \
+    --load-epoch        0 \
     --mom               0.9 \
     --wd                0.00004 \
     --top-k             5 \

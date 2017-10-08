@@ -260,7 +260,8 @@ def _func_predict(args):
 
     logging.info('tester finished (product_count:{0}, accuracy={1:.6f})'.format(
         product_count, correct_count / product_count))
-    writer.close()
+    if writer:
+        writer.close()
 
 
 def _hwc_to_chw(img):
