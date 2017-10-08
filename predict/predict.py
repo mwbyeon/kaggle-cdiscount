@@ -265,9 +265,9 @@ def _func_predict(args):
 
 
 def _hwc_to_chw(img):
-    img = np.swapaxes(img, 0, 2)
-    img = np.swapaxes(img, 1, 2)
-    return img
+    img_chw = np.swapaxes(img, 0, 2)
+    img_chw = np.swapaxes(img_chw, 1, 2)
+    return img_chw
 
 
 def _func_processor(args):
