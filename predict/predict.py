@@ -16,6 +16,7 @@ import numpy as np
 import cv2
 import bson
 import zmq
+from tqdm import tqdm
 
 Batch = namedtuple('Batch', ['data'])
 
@@ -117,11 +118,12 @@ def read_images(bson_path, csv_path):
             for e, pic in enumerate(d['imgs']):
                 img_bytes = pic['picture']
                 h = hashlib.md5(img_bytes).hexdigest()
-                if h not in prod_md5_set:
-                    prod_md5_set.add(h)
-                    item = (image_count, img_bytes, product_id)
-                    items.append(item)
-                    image_count += 1
+                if args.product_unique_md5 and h in prod_md5_set:
+                    continue
+                prod_md5_set.add(h)
+                item = (image_count, img_bytes, product_id)
+                items.append(item)
+                image_count += 1
             product_count += 1
             yield items  # list of [id, picture, label, [label,]]
     logging.info('read finished (product:{}, image:{})'.format(product_count, image_count))
@@ -197,6 +199,7 @@ def _func_predict(args):
     product_count = 0
     correct_count = 0
 
+    bar = tqdm(total=len(ground_truths))
     finished = False
     while not finished:
         images = ext_socket.recv_pyobj()
@@ -213,6 +216,7 @@ def _func_predict(args):
                 batch_ids.append(product_id)
                 batch_raw.append(raw)
             product_count += 1
+            bar.update(n=1)
         else:
             pad_forward = True
 
@@ -228,9 +232,9 @@ def _func_predict(args):
                     writer.write('{0:d},{1:d}\n'.format(_id, pred))
                     writer.flush()
             __t3 = time.time()
-            logging.info('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
+            bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
                 product_count, correct_count / product_count,
-                __t1-__t0, __t2-__t1, __t3-__t2, args.batch_size / (__t3-__t0)))
+                __t1-__t0, __t2-__t1, __t3-__t2, len(batch_ids) / (__t3-__t0)))
 
             batch_ids[:] = []
             batch_raw[:] = []
@@ -241,6 +245,7 @@ def _func_predict(args):
                     batch_ids.append(class_id)
                     batch_raw.append(raw)
                 product_count += 1
+                bar.update(n=1)
             __t0 = time.time()
 
     __t1 = time.time()
@@ -254,9 +259,10 @@ def _func_predict(args):
             writer.write('{0:d},{1:d}\n'.format(_id, pred))
             writer.flush()
     __t3 = time.time()
-    logging.info('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
+    bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
         product_count, correct_count / product_count,
-        __t1 - __t0, __t2 - __t1, __t3 - __t2, args.batch_size / (__t3 - __t0)))
+        __t1 - __t0, __t2 - __t1, __t3 - __t2, len(batch_ids) / (__t3 - __t0)))
+    bar.close()
 
     logging.info('tester finished (product_count:{0}, accuracy={1:.6f})'.format(
         product_count, correct_count / product_count))
@@ -303,13 +309,19 @@ def main(args):
     proc_predict = Process(target=_func_predict, args=(args,))
     proc_processors = [Process(target=_func_processor, args=(args,)) for _ in range(args.num_procs)]
 
-    proc_reader.start()
-    proc_predict.start()
-    [x.start() for x in proc_processors]
+    try:
+        proc_reader.start()
+        proc_predict.start()
+        [x.start() for x in proc_processors]
 
-    proc_reader.join()
-    proc_predict.join()
-    [x.join() for x in proc_processors]
+        proc_reader.join()
+        proc_predict.join()
+        [x.join() for x in proc_processors]
+    except KeyboardInterrupt:
+        logging.warning('Keyboard Interrupted. Terminate all processes.')
+        proc_reader.terminate()
+        proc_predict.terminate()
+        [x.terminate() for x in proc_processors]
 
 
 if __name__ == '__main__':
@@ -327,6 +339,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--md5-dict-pkl', type=str, default=None)
     parser.add_argument('--multi-view', type=int, default=0)
+    parser.add_argument('--product-unique-md5', action='store_true')
 
     parser.add_argument('--mean-max-pooling', action='store_true')
     parser.add_argument('--pool-name', type=str, default='pool1')
