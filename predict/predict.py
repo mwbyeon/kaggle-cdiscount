@@ -6,10 +6,11 @@ import hashlib
 import logging
 import coloredlogs
 import pickle
+from operator import itemgetter
 from multiprocessing import Process
 coloredlogs.install(level=logging.INFO, milliseconds=True)
 
-from collections import namedtuple
+from collections import namedtuple, Counter
 
 import mxnet as mx
 import numpy as np
@@ -198,6 +199,7 @@ def _func_predict(args):
     term_count = 0
     product_count = 0
     correct_count = 0
+    catetory_count_dict, correct_count_dict = Counter(), Counter()
 
     bar = tqdm(total=len(ground_truths))
     finished = False
@@ -226,8 +228,11 @@ def _func_predict(args):
             __t2 = time.time()
             for _id, prob in probs_dict.items():
                 pred = cid2cate[int(np.argmax(prob))]
-                if ground_truths[_id] == pred:
+                label = ground_truths[_id]
+                catetory_count_dict[label] += 1
+                if label == pred:  # correct
                     correct_count += 1
+                    correct_count_dict[label] += 1
                 if writer:
                     writer.write('{0:d},{1:d}\n'.format(_id, pred))
                     writer.flush()
@@ -253,8 +258,11 @@ def _func_predict(args):
     __t2 = time.time()
     for _id, prob in probs_dict.items():
         pred = cid2cate[int(np.argmax(prob))]
-        if ground_truths[_id] == pred:
+        label = ground_truths[_id]
+        catetory_count_dict[label] += 1
+        if label == pred:  # correct
             correct_count += 1
+            correct_count_dict[label] += 1
         if writer:
             writer.write('{0:d},{1:d}\n'.format(_id, pred))
             writer.flush()
@@ -269,6 +277,13 @@ def _func_predict(args):
     if writer:
         writer.close()
 
+    if args.print_summary:
+        category_accuracy = [(cate, count, correct_count_dict[cate], correct_count_dict[cate] / count)
+                             for cate, count in catetory_count_dict.items()]
+        category_accuracy = sorted(category_accuracy, key=itemgetter(3, 1), reverse=True)
+        for i, item in enumerate(category_accuracy):
+            print('{0:4d}\t{1:10d}\t{2:8d}\t{3:8d}\t{4:.6f}'.format(i, *item))
+
 
 def _hwc_to_chw(img):
     img_chw = np.swapaxes(img, 0, 2)
@@ -281,7 +296,7 @@ def _func_processor(args):
     zmq_socket = context.socket(zmq.PULL)
     zmq_socket.set_hwm(0)
     zmq_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port))
-    logging.info('processor started')
+    # logging.info('processor started')
 
     ext_socket = context.socket(zmq.PUSH)
     ext_socket.set_hwm(args.batch_size)
@@ -290,7 +305,7 @@ def _func_processor(args):
     while True:
         items = zmq_socket.recv_pyobj()
         if items is None:
-            logging.info('processor finished')
+            # logging.info('processor finished')
             ext_socket.send_pyobj(None)
             return
         images = []
@@ -346,6 +361,7 @@ if __name__ == '__main__':
     parser.add_argument('--fc-name', type=str, default='fc')
 
     parser.add_argument('--output', type=str)
+    parser.add_argument('--print-summary', action='store_true')
     args = parser.parse_args()
 
     main(args)

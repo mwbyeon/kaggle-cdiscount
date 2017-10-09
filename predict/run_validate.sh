@@ -4,7 +4,7 @@ python3 -u predict.py \
     --zmq-port      18300 \
     --bson          /home/deploy/dylan/projects/kaggle-cdiscount/data/refined_val.bson \
     --csv           /home/deploy/dylan/dataset/cdiscount/category_names.csv \
-    --params        /home/deploy/dylan/projects/kaggle-cdiscount/train/checkpoints/resnext-101-newset/imagenet1k-resnext-101-0009.params \
+    --params        /home/deploy/dylan/projects/kaggle-cdiscount/train/checkpoints/resnext-101-newset/imagenet1k-resnext-101-0011.params \
     --symbol        /home/deploy/dylan/projects/kaggle-cdiscount/train/checkpoints/resnext-101-newset/imagenet1k-resnext-101-symbol.json \
     --batch-size    1024 \
     --data-shape    3,180,180 \
@@ -12,4 +12,5 @@ python3 -u predict.py \
     --num-procs     24 \
     --multi-view    0 \
     --output        "" \
-    --product-unique-md5
+    --product-unique-md5 \
+    --print-summary
