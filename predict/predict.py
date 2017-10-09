@@ -10,7 +10,7 @@ from operator import itemgetter
 from multiprocessing import Process
 coloredlogs.install(level=logging.INFO, milliseconds=True)
 
-from collections import namedtuple, Counter
+from collections import namedtuple, Counter, defaultdict
 
 import mxnet as mx
 import numpy as np
@@ -200,6 +200,7 @@ def _func_predict(args):
     product_count = 0
     correct_count = 0
     catetory_count_dict, correct_count_dict = Counter(), Counter()
+    incorrect_count_dict = defaultdict(Counter)
 
     bar = tqdm(total=len(ground_truths))
     finished = False
@@ -233,6 +234,8 @@ def _func_predict(args):
                 if label == pred:  # correct
                     correct_count += 1
                     correct_count_dict[label] += 1
+                else:
+                    incorrect_count_dict[label][pred] += 1
                 if writer:
                     writer.write('{0:d},{1:d}\n'.format(_id, pred))
                     writer.flush()
@@ -263,6 +266,8 @@ def _func_predict(args):
         if label == pred:  # correct
             correct_count += 1
             correct_count_dict[label] += 1
+        else:
+            incorrect_count_dict[label][pred] += 1
         if writer:
             writer.write('{0:d},{1:d}\n'.format(_id, pred))
             writer.flush()
@@ -281,8 +286,13 @@ def _func_predict(args):
         category_accuracy = [(cate, count, correct_count_dict[cate], correct_count_dict[cate] / count)
                              for cate, count in catetory_count_dict.items()]
         category_accuracy = sorted(category_accuracy, key=itemgetter(3, 1), reverse=True)
-        for i, item in enumerate(category_accuracy):
-            print('{0:4d}\t{1:10d}\t{2:8d}\t{3:8d}\t{4:.6f}'.format(i, *item))
+        for i, (cate, count, correct, accuracy) in enumerate(category_accuracy):
+            print('{0:4d}\t{1:10d}\t{2:8d}\t{3:8d}\t{4:.6f}'.format(i, cate, count, correct, accuracy), end='')
+            if incorrect_count_dict[cate]:
+                second = incorrect_count_dict[cate].most_common(1)[0]
+                print('\t{0:10d}\t{1:.6f}'.format(second[0], second[1] / count))
+            else:
+                print()
 
 
 def _hwc_to_chw(img):
@@ -345,9 +355,9 @@ if __name__ == '__main__':
     parser.add_argument('--bson', type=str, required=True)
     parser.add_argument('--csv', type=str, required=True)
     parser.add_argument('--params', type=str, required=True)
-    parser.add_argument('--symbol', type=str, default='3,180,180')
+    parser.add_argument('--symbol', type=str, required=True)
     parser.add_argument('--batch-size', type=int, required=True)
-    parser.add_argument('--data-shape', type=str, required=True)
+    parser.add_argument('--data-shape', type=str, default='3,180,180')
     parser.add_argument('--gpus', type=str, default='0')
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18300)
