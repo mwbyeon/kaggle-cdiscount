@@ -362,7 +362,7 @@ if __name__ == '__main__':
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18300)
 
-    parser.add_argument('--md5-dict-pkl', type=str, default=None)
+    parser.add_argument('--md5-dict-pkl', type=str, default='')
     parser.add_argument('--multi-view', type=int, default=0)
     parser.add_argument('--product-unique-md5', action='store_true')
 
@@ -370,7 +370,7 @@ if __name__ == '__main__':
     parser.add_argument('--pool-name', type=str, default='pool1')
     parser.add_argument('--fc-name', type=str, default='fc')
 
-    parser.add_argument('--output', type=str)
+    parser.add_argument('--output', type=str, default='')
     parser.add_argument('--print-summary', action='store_true')
     args = parser.parse_args()
 
