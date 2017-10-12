@@ -148,24 +148,25 @@ def _func_reader(args):
     logging.info('reader finished (product: {})'.format(product_count))
 
 
-def _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict=None, cate2cid=None):
-    output = tester.get_output(batch_data)
+def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, cate2cid=None):
     probs_dict = dict()
-    probs = output[0].asnumpy()
-    for i, _id in enumerate(batch_ids):
-        if _id is not None:
-            p = probs[i]
-            if md5_dict:
-                assert isinstance(cate2cid, dict)
-                h = hashlib.md5(batch_raw[i]).hexdigest()
-                if h in md5_dict:
-                    p = np.zeros(probs.shape[1:])
-                    p[cate2cid[md5_dict[h]]] = 1.0
+    for tester in testers:
+        output = tester.get_output(batch_data)
+        probs = output[0].asnumpy()
+        for i, _id in enumerate(batch_ids):
+            if _id is not None:
+                p = probs[i]
+                if md5_dict:
+                    assert isinstance(cate2cid, dict)
+                    h = hashlib.md5(batch_raw[i]).hexdigest()
+                    if h in md5_dict:
+                        p = np.zeros(probs.shape[1:])
+                        p[cate2cid[md5_dict[h]]] = 1.0
 
-            if _id in probs_dict:
-                probs_dict[_id] += p
-            else:
-                probs_dict[_id] = p
+                if _id in probs_dict:
+                    probs_dict[_id] += p
+                else:
+                    probs_dict[_id] = p
     return probs_dict
 
 
@@ -179,9 +180,13 @@ def _func_predict(args):
     data_shape = [int(x) for x in args.data_shape.split(',')]
     batch_shape = [args.batch_size] + data_shape
     logging.info('batch_shape: {}'.format(batch_shape))
-    tester = Tester(args.symbol, args.params, batch_shape,
-                    mean_max_pooling=args.mean_max_pooling, pool_name=args.pool_name, fc_name=args.fc_name,
-                    gpus=args.gpus)
+
+    testers = []
+    for symbol, params in zip(args.symbol, args.params):
+        logging.info('load: {}'.format(symbol))
+        testers.append(Tester(symbol, params, batch_shape,
+                              mean_max_pooling=args.mean_max_pooling, pool_name=args.pool_name, fc_name=args.fc_name,
+                              gpus=args.gpus))
 
     context = zmq.Context()
     ext_socket = context.socket(zmq.PULL)
@@ -225,7 +230,7 @@ def _func_predict(args):
 
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
-            probs_dict = _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
+            probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
             __t2 = time.time()
             for _id, prob in probs_dict.items():
                 pred = cid2cate[int(np.argmax(prob))]
@@ -257,7 +262,7 @@ def _func_predict(args):
             __t0 = time.time()
 
     __t1 = time.time()
-    probs_dict = _do_forward(tester, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
+    probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
     __t2 = time.time()
     for _id, prob in probs_dict.items():
         pred = cid2cate[int(np.argmax(prob))]
@@ -354,8 +359,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--bson', type=str, required=True)
     parser.add_argument('--csv', type=str, required=True)
-    parser.add_argument('--params', type=str, required=True)
-    parser.add_argument('--symbol', type=str, required=True)
+    parser.add_argument('--params', type=str, nargs='+', required=True)
+    parser.add_argument('--symbol', type=str, nargs='+', required=True)
     parser.add_argument('--batch-size', type=int, required=True)
     parser.add_argument('--data-shape', type=str, default='3,180,180')
     parser.add_argument('--gpus', type=str, default='0')
@@ -373,6 +378,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, default='')
     parser.add_argument('--print-summary', action='store_true')
     args = parser.parse_args()
+
+    assert len(args.params) == len(args.symbol)
 
     main(args)
 
