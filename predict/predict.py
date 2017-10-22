@@ -104,7 +104,7 @@ def category_csv_to_dict(category_csv):
     return cate2cid, cid2cate
 
 
-def read_images(bson_path, csv_path):
+def read_images(bson_path, csv_path, cut=None):
     cate_dict, _ = category_csv_to_dict(csv_path)
 
     with open(bson_path, 'rb') as reader:
@@ -112,6 +112,8 @@ def read_images(bson_path, csv_path):
 
         product_count, image_count = 0, 0
         for c, d in enumerate(data):
+            if cut and c == cut:
+                break
             product_id = d.get('_id')
             category_id = d.get('category_id', None)  # This won't be in Test data
             items = []
@@ -138,7 +140,7 @@ def _func_reader(args):
     logging.info('reader started (port: {port})'.format(port=args.zmq_port))
 
     product_count = 0
-    for items in read_images(args.bson, args.csv):
+    for items in read_images(args.bson, args.csv, args.cut):
         zmq_socket.send_pyobj(items)
         product_count += 1
 
@@ -326,10 +328,17 @@ def _func_processor(args):
         images = []
         for _, img_bytes, product_id in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            images.append((_hwc_to_chw(img), product_id, img_bytes))
-            if args.multi_view >= 1:
+            if args.multi_view >= 0:  # 0.778900
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                images.append((_hwc_to_chw(img), product_id, img_bytes))
+            if args.multi_view >= 1:  # 0.780900 (+0.0020)
                 img_flip = cv2.flip(img, flipCode=1)
+                images.append((_hwc_to_chw(img_flip), product_id, img_bytes))
+            if args.multi_view >= 2:  # 0.781000 (+0.0001)
+                img_crop = cv2.resize(img[10:170, 10:170, :], (180, 180))
+                images.append((_hwc_to_chw(img_crop), product_id, img_bytes))
+            if args.multi_view >= 3:  # 0.781700 (+0.0007)
+                img_flip = cv2.flip(img, flipCode=0)
                 images.append((_hwc_to_chw(img_flip), product_id, img_bytes))
         ext_socket.send_pyobj(images)
 
@@ -366,6 +375,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpus', type=str, default='0')
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18300)
+    parser.add_argument('--cut', type=int, default=0)
 
     parser.add_argument('--md5-dict-pkl', type=str, default='')
     parser.add_argument('--multi-view', type=int, default=0)

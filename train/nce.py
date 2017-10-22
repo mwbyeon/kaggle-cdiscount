@@ -1,4 +1,3 @@
-
 import mxnet as mx
 import mxnet.metric
 import numpy as np
@@ -6,14 +5,14 @@ from operator import itemgetter
 
 
 def nce_loss(data, label, label_weight, embed_weight, vocab_size, num_hidden, num_label):
-    label_embed = mx.sym.Embedding(data = label, input_dim = vocab_size,
-                                   weight = embed_weight,
-                                   output_dim = num_hidden, name = 'label_embed')
-    data = mx.sym.Reshape(data = data, shape = (-1, 1, num_hidden))
+    label_embed = mx.sym.Embedding(data=label, input_dim=vocab_size,
+                                   weight=embed_weight,
+                                   output_dim=num_hidden, name='label_embed')
+    data = mx.sym.Reshape(data=data, shape=(-1, 1, num_hidden))
     pred = mx.sym.broadcast_mul(data, label_embed)
-    pred = mx.sym.sum(data = pred, axis = 2)
-    return mx.sym.LogisticRegressionOutput(data = pred,
-                                           label = label_weight)
+    pred = mx.sym.sum(data=pred, axis=2)
+    return mx.sym.SoftmaxOutput(data=pred, label=label_weight)
+    # return mx.sym.LogisticRegressionOutput(data=pred, label=label_weight)
 
 
 class NceAccuracy(mx.metric.Accuracy):
