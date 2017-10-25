@@ -88,7 +88,7 @@ class Tester(object):
 
 def category_csv_to_dict(category_csv):
     cate2cid, cid2cate = dict(), dict()
-    with open(category_csv, 'r') as reader:
+    with open(category_csv, 'r', encoding='utf-8') as reader:
         csvreader = csv.reader(reader, delimiter=',', quotechar='"')
         for i, row in enumerate(csvreader):
             if i == 0:
