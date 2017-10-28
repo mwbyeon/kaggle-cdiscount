@@ -41,7 +41,7 @@ def main(args):
     print('Accuracy: {:.6f}'.format(sum(cate1_correct_counter.values())/sum(cate1_total_counter.values())))
     for cate1 in cate1_total_counter:
         cate1_accuracy = cate1_correct_counter[cate1] / cate1_total_counter[cate1]
-        print('{:8d}/{:8d}\t{:.6f}\t{}'.format(cate1_correct_counter[cate1], cate1_total_counter[cate1], cate1_accuracy, cate1))
+        print('{:8d}\t{:8d}\t{:.6f}\t{}'.format(cate1_correct_counter[cate1], cate1_total_counter[cate1], cate1_accuracy, cate1))
 
 
 if __name__ == '__main__':
