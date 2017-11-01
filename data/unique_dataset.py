@@ -66,7 +66,7 @@ def main(args):
         print(i, k, v)
 
     with open(args.md5_dict_pkl, 'wb') as writer:
-        pickle.dump(refined, writer)
+        pickle.dump(md5_dict, writer)
 
     print('total image count: {}'.format(image_count))
     print('unique image count: {}'.format(len(md5_dict)))
