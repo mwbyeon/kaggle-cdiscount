@@ -6,6 +6,7 @@ import hashlib
 import logging
 import coloredlogs
 import pickle
+import sys
 from operator import itemgetter
 from multiprocessing import Process
 coloredlogs.install(level=logging.INFO, milliseconds=True)
@@ -150,23 +151,48 @@ def _func_reader(args):
     logging.info('reader finished (product: {})'.format(product_count))
 
 
-def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, cate2cid=None):
+def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_type=None, cate2cid=None):
     probs_dict = dict()
     for tester in testers:
         output = tester.get_output(batch_data)
         probs = output[0].asnumpy()
         for i, _id in enumerate(batch_ids):
             if _id is not None:
-                p = probs[i]
+                p = probs[i]  # softmax
                 if md5_dict:
                     assert isinstance(cate2cid, dict)
                     h = hashlib.md5(batch_raw[i]).hexdigest()
                     if h in md5_dict:
-                        p = np.zeros(probs.shape[1:])
-                        p[cate2cid[md5_dict[h]]] = 1.0
+                        if md5_type == 'unique' and len(md5_dict[h]) == 1:
+                            p = np.zeros(probs.shape[1:])
+                            most_label, most_count = md5_dict[h].most_common(1)[0]
+                            p[cate2cid[most_label]] = 1.0
+                        elif md5_type == 'majority':
+                            p = np.zeros(probs.shape[1:])
+                            most_label, most_count = md5_dict[h].most_common(1)[0]
+                            p[cate2cid[most_label]] = 1.0
+                        elif md5_type == 'l1':  # BEST!
+                            p = np.zeros(probs.shape[1:])
+                            for cate, cnt in md5_dict[h].items():
+                                p[cate2cid[cate]] = cnt
+                            p /= sum(list(md5_dict[h].values()))
+                        elif md5_type == 'l2':
+                            p = np.zeros(probs.shape[1:])
+                            for cate, cnt in md5_dict[h].items():
+                                p[cate2cid[cate]] = cnt
+                            p /= np.linalg.norm(list(md5_dict[h].values()))
+                        elif md5_type == 'softmax':
+                            p = np.zeros(probs.shape[1:])
+                            for cate, cnt in md5_dict[h].items():
+                                p[cate2cid[cate]] = cnt
+                            e_p = np.exp(p - np.max(p))
+                            p = e_p / e_p.sum()
 
                 if _id in probs_dict:
-                    probs_dict[_id] += p
+                    if args.multi_view_mean == 'arithmetic':
+                        probs_dict[_id] += p
+                    elif args.multi_view_mean == 'geometric':
+                        probs_dict[_id] *= p
                 else:
                     probs_dict[_id] = p
     return probs_dict
@@ -209,7 +235,7 @@ def _func_predict(args):
     catetory_count_dict, correct_count_dict = Counter(), Counter()
     incorrect_count_dict = defaultdict(Counter)
 
-    bar = tqdm(total=len(ground_truths))
+    bar = tqdm(total=len(ground_truths), unit='products')
     finished = False
     while not finished:
         images = ext_socket.recv_pyobj()
@@ -232,7 +258,7 @@ def _func_predict(args):
 
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
-            probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
+            probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, args.md5_dict_type, cate2cid)
             __t2 = time.time()
             for _id, prob in probs_dict.items():
                 pred = cid2cate[int(np.argmax(prob))]
@@ -247,7 +273,7 @@ def _func_predict(args):
                     writer.write('{0:d},{1:d}\n'.format(_id, pred))
                     writer.flush()
             __t3 = time.time()
-            bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
+            bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.1f}images/s)'.format(
                 product_count, correct_count / product_count,
                 __t1-__t0, __t2-__t1, __t3-__t2, len(batch_ids) / (__t3-__t0)))
 
@@ -264,7 +290,7 @@ def _func_predict(args):
             __t0 = time.time()
 
     __t1 = time.time()
-    probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, cate2cid)
+    probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, args.md5_dict_type, cate2cid)
     __t2 = time.time()
     for _id, prob in probs_dict.items():
         pred = cid2cate[int(np.argmax(prob))]
@@ -378,7 +404,9 @@ if __name__ == '__main__':
     parser.add_argument('--cut', type=int, default=0)
 
     parser.add_argument('--md5-dict-pkl', type=str, default='')
+    parser.add_argument('--md5-dict-type', type=str, choices=['none', 'unique', 'majority', 'l1', 'l2', 'softmax'])
     parser.add_argument('--multi-view', type=int, default=0)
+    parser.add_argument('--multi-view-mean', type=str, choices=['arithmetic', 'geometric'], default='arithmetic')
     parser.add_argument('--product-unique-md5', action='store_true')
 
     parser.add_argument('--mean-max-pooling', action='store_true')
@@ -390,6 +418,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     assert len(args.params) == len(args.symbol)
+
+    logging.info('Arguments')
+    for k, v in vars(args).items():
+        logging.info('  {}: {}'.format(k, v))
 
     main(args)
 
