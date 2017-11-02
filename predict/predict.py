@@ -9,7 +9,7 @@ import pickle
 import sys
 from operator import itemgetter
 from multiprocessing import Process
-coloredlogs.install(level=logging.INFO, milliseconds=True)
+coloredlogs.install(level=logging.DEBUG, milliseconds=True)
 
 from collections import namedtuple, Counter, defaultdict
 
@@ -47,7 +47,7 @@ class Tester(object):
                     sym_fc = x
 
             if sym_pool is None or sym_fc is None:
-                print( [x.name for x in sym_softmax.get_internals()])
+                logging.error([x.name for x in sym_softmax.get_internals()])
                 if sym_pool is None:
                     raise ValueError('Cannot find output that matches name {}'.format(sym_pool))
                 if sym_fc is None:
@@ -320,12 +320,13 @@ def _func_predict(args):
                              for cate, count in catetory_count_dict.items()]
         category_accuracy = sorted(category_accuracy, key=itemgetter(3, 1), reverse=True)
         for i, (cate, count, correct, accuracy) in enumerate(category_accuracy):
-            print('{0:4d}\t{1:10d}\t{2:8d}\t{3:8d}\t{4:.6f}'.format(i, cate, count, correct, accuracy), end='')
+            line = '{0:4d}\t{1:10d}\t{2:8d}\t{3:8d}\t{4:.6f}'.format(i, cate, count, correct, accuracy)
             if incorrect_count_dict[cate]:
                 second = incorrect_count_dict[cate].most_common(1)[0]
-                print('\t{0:10d}\t{1:.6f}'.format(second[0], second[1] / count))
+                line += '\t{0:10d}\t{1:.6f}'.format(second[0], second[1] / count)
             else:
-                print()
+                line += '\n'
+            logging.info(line)
 
 
 def _hwc_to_chw(img):

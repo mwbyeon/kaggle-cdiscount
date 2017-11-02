@@ -9,12 +9,11 @@ MODEL=resnext-101
 MXNET_CUDNN_AUTOTUNE_DEFAULT=0 python3 -u fine-tune.py \
     --gpus              0,1,2,3,4,5,6,7 \
     --kv-store          device \
-    --pretrained-model  ${ROOT}/train/model/DPNs/dpn68-5k \
-    --model-prefix      ${ROOT}/train/checkpoints/dpn68-5k/dpn68-newset \
-    --fix-last-layer \
-    --layer-before-fullc flatten \
+    --pretrained-model  ${ROOT}/train/model/imagenet1k-resnext-101-64x4d-elu \
+    --model-prefix      ${ROOT}/train/checkpoints/resnext-101-64x4d-elu \
     --data-train        ${ROOT}/data/train_split_train.rec \
     --data-val          ${ROOT}/data/train_split_val.rec \
+    --layer-before-fullc flatten0 \
     --image-shape       3,180,180 \
     --data-nthread      6 \
     --optimizer         adam \
@@ -27,7 +26,7 @@ MXNET_CUDNN_AUTOTUNE_DEFAULT=0 python3 -u fine-tune.py \
     --mom               0.9 \
     --wd                0.00004 \
     --top-k             5 \
-    --batch-size        1024 \
+    --batch-size        512 \
     --num-classes       5270 \
     --num-examples      ${C5270_NUM_EXAMPLES} \
     --rgb-mean          0,0,0 \
