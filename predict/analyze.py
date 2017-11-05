@@ -34,9 +34,10 @@ def main(args):
             if i == 0:  # ignore header line
                 continue
             prod_id, cate_id = (int(x) for x in row)
-            cate1, cate2, cate3 = cate3_dict[cate_id]['names']
+            cate_answer = products[prod_id]['category_id']
+            cate1, cate2, cate3 = cate3_dict[cate_answer]['names']
             cate1_total_counter[cate1] += 1
-            if products[prod_id]['category_id'] == cate_id:
+            if cate_answer == cate_id:
                 cate1_correct_counter[cate1] += 1
             else:
                 pass
