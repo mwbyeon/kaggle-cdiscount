@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import random
 import logging
 import coloredlogs
@@ -8,6 +11,8 @@ coloredlogs.install(level=logging.INFO)
 
 import bson
 from tqdm import tqdm
+
+from data.utils import encode_dict_list
 
 
 def products_iter(input_bson_path, product_ids):
@@ -17,13 +22,6 @@ def products_iter(input_bson_path, product_ids):
             prod_id = prod.get('_id')
             if prod_id in product_ids:
                 yield prod
-
-
-def encode_dict_list(products, output_bson_path, total=None):
-    with open(output_bson_path, 'wb') as writer:
-        for i, prod in tqdm(enumerate(products), unit='products', total=total):
-            obj = bson._dict_to_bson(prod, False, bson.DEFAULT_CODEC_OPTIONS)
-            writer.write(obj)
 
 
 def main(args):

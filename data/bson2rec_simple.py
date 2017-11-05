@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import csv
+import sys
 import os
 import hashlib
 import pickle
@@ -15,39 +15,16 @@ import bson
 from tqdm import tqdm
 
 
-def category_csv_to_dict(category_csv):
-    cate2cid, cid2cate = dict(), dict()
-    with open(category_csv, 'r') as reader:
-        csvreader = csv.reader(reader, delimiter=',', quotechar='"')
-        for i, row in enumerate(csvreader):
-            if i == 0:
-                continue
-            try:
-                cateid, cate1, cate2, cate3 = row
-                cid = len(cate2cid)
-                cate2cid[int(cateid)] = cid
-                cid2cate[cid] = int(cateid)
-            except Exception as e:
-                logging.error('cannot parse line: {}, {}'.format(row, e))
-    logging.info('{} categories in {}'.format(len(cate2cid), category_csv))
-    return cate2cid, cid2cate
-
-
-def get_bson_count(bson_path):
-    logging.info('counting bson items...')
-    count = 0
-    with open(bson_path, 'rb') as reader:
-        data = bson.decode_file_iter(reader)
-        for _ in tqdm(data, unit='products'):
-            count += 1
-    return count
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data.category import get_category_dict
+from data import utils
 
 
 def read_images(args):
-    cate2cid, cid2cate = category_csv_to_dict(args.category_csv)
+    cate1_dict, cate2_dict, cate3_dict = get_category_dict()
 
     logging.info('read bson file: {}'.format(args.bson))
-    total_count = get_bson_count(args.bson)
+    total_count = utils.get_bson_count(args.bson)
     data = bson.decode_file_iter(open(args.bson, 'rb'))
 
     idx = 0
@@ -78,7 +55,13 @@ def read_images(args):
             if category_id is None:
                 item = (idx, img_bytes, -1)
             elif category_counter[category_id] < args.under_sampling:
-                item = (idx, img_bytes, cate2cid[category_id])
+                if args.cate_type == 1:
+                    class_id = cate1_dict[(cate3_dict[category_id]['names'][0],)]['child_cate3'][category_id]
+                elif args.cate_type == 3:
+                    class_id = cate3_dict[category_id]['cate3_class_id']
+                else:
+                    raise ValueError('invalid cate type: {}'.format(args.cate_type))
+                item = (idx, img_bytes, class_id)
                 category_counter[category_id] += 1
 
             if item is not None:
@@ -124,9 +107,9 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--bson', type=str, required=True)
-    parser.add_argument('--category-csv', type=str, required=True)
     parser.add_argument('--out-rec', type=str, required=True)
     parser.add_argument('--md5-dict-pkl', type=str, default=None)
+    parser.add_argument('--cate-type', type=int, default=3)
     parser.add_argument('--shuffle-size', type=int, default=99999999)
     parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
     parser.add_argument('--unique-md5', action='store_true')

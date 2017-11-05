@@ -7,6 +7,7 @@ import logging
 import coloredlogs
 import pickle
 import sys
+import os
 from operator import itemgetter
 from multiprocessing import Process
 coloredlogs.install(level=logging.DEBUG, milliseconds=True)
@@ -19,6 +20,10 @@ import cv2
 import bson
 import zmq
 from tqdm import tqdm
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data.category import get_category_dict
+
 
 Batch = namedtuple('Batch', ['data'])
 
@@ -106,8 +111,6 @@ def category_csv_to_dict(category_csv):
 
 
 def read_images(bson_path, csv_path, cut=None):
-    cate_dict, _ = category_csv_to_dict(csv_path)
-
     with open(bson_path, 'rb') as reader:
         data = bson.decode_file_iter(reader)
 
@@ -163,7 +166,7 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_ty
                     assert isinstance(cate2cid, dict)
                     h = hashlib.md5(batch_raw[i]).hexdigest()
                     if h in md5_dict:
-                        if md5_type == 'unique' and len(md5_dict[h]) == 1:
+                        if md5_type == 'unique' and len(md5_dict[h]) == 1:  # BEST!
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             p[cate2cid[most_label]] = 1.0
@@ -171,7 +174,7 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_ty
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             p[cate2cid[most_label]] = 1.0
-                        elif md5_type == 'l1':  # BEST!
+                        elif md5_type == 'l1':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
                                 p[cate2cid[cate]] = cnt
@@ -200,6 +203,8 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_ty
 
 def _func_predict(args):
     cate2cid, cid2cate = category_csv_to_dict(args.csv)
+    cate1_dict, cate2_dict, cate3_dict = get_category_dict()
+
     md5_dict = pickle.load(open(args.md5_dict_pkl, 'rb')) if args.md5_dict_pkl else None
     with open(args.bson, 'rb') as reader:
         ground_truths = dict((d.get('_id'), d.get('category_id')) for d in bson.decode_file_iter(reader))

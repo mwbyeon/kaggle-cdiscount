@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 
+import sys
+import os
 import csv
 from collections import defaultdict, Counter
 
 import bson
 from tqdm import tqdm
 
-from data.category import category_csv_to_dict
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data.category import get_category_dict
 
 
 def main(args):
-    cate2cid, cid2cate, cate2name = category_csv_to_dict(args.category_csv)
+    cate1_dict, cate2_dict, cate3_dict = get_category_dict()
 
     products = dict()
     with open(args.bson_path, 'rb') as reader:
@@ -31,7 +34,7 @@ def main(args):
             if i == 0:  # ignore header line
                 continue
             prod_id, cate_id = (int(x) for x in row)
-            cate1, cate2, cate3 = cate2name[cate_id]
+            cate1, cate2, cate3 = cate3_dict[cate_id]['names']
             cate1_total_counter[cate1] += 1
             if products[prod_id]['category_id'] == cate_id:
                 cate1_correct_counter[cate1] += 1
@@ -41,7 +44,11 @@ def main(args):
     print('Accuracy: {:.6f}'.format(sum(cate1_correct_counter.values())/sum(cate1_total_counter.values())))
     for cate1 in cate1_total_counter:
         cate1_accuracy = cate1_correct_counter[cate1] / cate1_total_counter[cate1]
-        print('{:8d}\t{:8d}\t{:.6f}\t{}'.format(cate1_correct_counter[cate1], cate1_total_counter[cate1], cate1_accuracy, cate1))
+        print('{:8d}\t{:8d}\t{:8d}\t{:.6f}\t[{:02d}] {}'.format(cate1_total_counter[cate1],
+                                                                cate1_correct_counter[cate1],
+                                                                cate1_total_counter[cate1] - cate1_correct_counter[cate1],
+                                                                cate1_accuracy,
+                                                                cate1_dict[(cate1,)]['cate1_class_id'], cate1))
 
 
 if __name__ == '__main__':

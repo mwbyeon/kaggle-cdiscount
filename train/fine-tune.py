@@ -21,6 +21,8 @@ def get_fine_tune_model(symbol, arg_params, num_classes, layer_name, use_lsoftma
     net = all_layers[layer_name + '_output']  # embedding
     label = mx.sym.Variable('softmax_label')
     if use_lsoftmax:
+        # Large-Margin Softmax Loss (https://arxiv.org/abs/1612.02295)
+        # https://github.com/luoyetx/mx-lsoftmax
         beta_min, beta = 0.0, 100
         scale = 0.99
         margin = 2
