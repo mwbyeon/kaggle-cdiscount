@@ -154,7 +154,7 @@ def _func_reader(args):
     logging.info('reader finished (product: {})'.format(product_count))
 
 
-def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_type=None, cate2cid=None):
+def _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=None, md5_type=None, cate_level=3):
     probs_dict = dict()
     for tester in testers:
         output = tester.get_output(batch_data)
@@ -163,31 +163,35 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_ty
             if _id is not None:
                 p = probs[i]  # softmax
                 if md5_dict:
-                    assert isinstance(cate2cid, dict)
                     h = hashlib.md5(batch_raw[i]).hexdigest()
                     if h in md5_dict:
                         if md5_type == 'unique' and len(md5_dict[h]) == 1:  # BEST!
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
-                            p[cate2cid[most_label]] = 1.0
+                            class_id = cate3_dict[most_label]['cate1_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
+                            p[class_id] = 1.0
                         elif md5_type == 'majority':
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
-                            p[cate2cid[most_label]] = 1.0
+                            class_id = cate3_dict[most_label]['cate1_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
+                            p[class_id] = 1.0
                         elif md5_type == 'l1':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
-                                p[cate2cid[cate]] = cnt
+                                class_id = cate3_dict[cate]['cate1_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
+                                p[class_id] = cnt
                             p /= sum(list(md5_dict[h].values()))
                         elif md5_type == 'l2':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
-                                p[cate2cid[cate]] = cnt
+                                class_id = cate3_dict[cate]['cate1_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
+                                p[class_id] = cnt
                             p /= np.linalg.norm(list(md5_dict[h].values()))
                         elif md5_type == 'softmax':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
-                                p[cate2cid[cate]] = cnt
+                                class_id = cate3_dict[cate]['cate1_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
+                                p[class_id] = cnt
                             e_p = np.exp(p - np.max(p))
                             p = e_p / e_p.sum()
 
@@ -202,12 +206,21 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict=None, md5_ty
 
 
 def _func_predict(args):
-    cate2cid, cid2cate = category_csv_to_dict(args.csv)
+    # cate2cid, cid2cate = category_csv_to_dict(args.csv)
     cate1_dict, cate2_dict, cate3_dict = get_category_dict()
 
     md5_dict = pickle.load(open(args.md5_dict_pkl, 'rb')) if args.md5_dict_pkl else None
+    ground_truths = dict()
     with open(args.bson, 'rb') as reader:
-        ground_truths = dict((d.get('_id'), d.get('category_id')) for d in bson.decode_file_iter(reader))
+        for d in bson.decode_file_iter(reader):
+            prod_id = d.get('_id')
+            cate_id = d.get('category_id')
+            cate1, cate2, cate3 = cate3_dict[cate_id]['names']
+            if args.cate_level == 1:
+                ground_truths[prod_id] = cate1_dict[(cate1,)]['child_cate3'][cate_id]
+            elif args.cate_level == 3:
+                ground_truths[prod_id] = cate3_dict[cate_id]['cate3_class_id']
+
     logging.info('ground_truths: {}'.format(len(ground_truths)))
 
     data_shape = [int(x) for x in args.data_shape.split(',')]
@@ -263,10 +276,10 @@ def _func_predict(args):
 
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
-            probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, args.md5_dict_type, cate2cid)
+            probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
             __t2 = time.time()
             for _id, prob in probs_dict.items():
-                pred = cid2cate[int(np.argmax(prob))]
+                pred = int(np.argmax(prob))
                 label = ground_truths[_id]
                 catetory_count_dict[label] += 1
                 if label == pred:  # correct
@@ -275,7 +288,8 @@ def _func_predict(args):
                 else:
                     incorrect_count_dict[label][pred] += 1
                 if writer:
-                    writer.write('{0:d},{1:d}\n'.format(_id, pred))
+                    cate_id = cate3_dict[pred]['cate3_class_id'] if args.cate_level == 3 else pred
+                    writer.write('{0:d},{1:d}\n'.format(_id, cate_id))
                     writer.flush()
             __t3 = time.time()
             bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.1f}images/s)'.format(
@@ -295,10 +309,10 @@ def _func_predict(args):
             __t0 = time.time()
 
     __t1 = time.time()
-    probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, md5_dict, args.md5_dict_type, cate2cid)
+    probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
     __t2 = time.time()
     for _id, prob in probs_dict.items():
-        pred = cid2cate[int(np.argmax(prob))]
+        pred = int(np.argmax(prob))
         label = ground_truths[_id]
         catetory_count_dict[label] += 1
         if label == pred:  # correct
@@ -307,7 +321,8 @@ def _func_predict(args):
         else:
             incorrect_count_dict[label][pred] += 1
         if writer:
-            writer.write('{0:d},{1:d}\n'.format(_id, pred))
+            cate_id = cate3_dict[pred]['cate3_class_id'] if args.cate_level == 3 else pred
+            writer.write('{0:d},{1:d}\n'.format(_id, cate_id))
             writer.flush()
     __t3 = time.time()
     bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
@@ -409,6 +424,7 @@ if __name__ == '__main__':
     parser.add_argument('--zmq-port', type=int, default=18300)
     parser.add_argument('--cut', type=int, default=0)
 
+    parser.add_argument('--cate-level', type=int, default=3)
     parser.add_argument('--md5-dict-pkl', type=str, default='')
     parser.add_argument('--md5-dict-type', type=str, choices=['none', 'unique', 'majority', 'l1', 'l2', 'softmax'])
     parser.add_argument('--multi-view', type=int, default=0)
