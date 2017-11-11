@@ -13,6 +13,8 @@ def add_data_args(parser):
     data.add_argument('--rgb-scale', type=float, default=1.0)
     data.add_argument('--pad-size', type=int, default=0,
                       help='padding the input image')
+    data.add_argument('--resize', type=int, default=-1,
+                      help='Down scale the shorter edge to a new size before applying other augmentations')
     data.add_argument('--image-shape', type=str,
                       help='the image shape feed into the network, e.g. (3,224,224)')
     data.add_argument('--num-classes', type=int, help='the number of classes')
@@ -122,6 +124,7 @@ def get_rec_iter(args, kv=None):
         scale=args.rgb_scale,
         data_name=args.data_name,
         label_name=args.label_name,
+        resize=args.resize,
         data_shape=image_shape,
         batch_size=args.batch_size,
         rand_crop=args.random_crop,
@@ -153,6 +156,7 @@ def get_rec_iter(args, kv=None):
         data_name=args.data_name,
         label_name=args.label_name,
         batch_size=args.batch_size,
+        resize=args.resize,
         data_shape=image_shape,
         preprocess_threads=args.data_nthreads,
         rand_crop=False,
