@@ -81,7 +81,7 @@ def add_fit_args(parser):
                        help='show progress for every n batches')
     train.add_argument('--model-prefix', type=str,
                        help='model prefix')
-    parser.add_argument('--monitor', dest='monitor', type=int, default=0,
+    train.add_argument('--monitor', dest='monitor', type=int, default=0,
                         help='log network parameters every N iters if larger than 0')
     train.add_argument('--load-epoch', type=int,
                        help='load the model on an epoch using the model-load-prefix')
@@ -99,7 +99,7 @@ def fit(args, network, data_loader, **kwargs):
     """
     train a model
     args : argparse returns
-    network : the symbol definition of the nerual network
+    network : the symbol definition of the neural network
     data_loader : function that returns the train and val data iterators
     """
     # kvstore

@@ -7,8 +7,6 @@ from common import find_mxnet
 from common import data, fit, modelzoo
 import mxnet as mx
 
-from nce import nce_loss
-
 
 def get_fine_tune_model(symbol, arg_params, num_classes, layer_name, use_lsoftmax=False):
     """
