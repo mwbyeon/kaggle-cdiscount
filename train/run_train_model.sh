@@ -6,6 +6,7 @@ MXNET_CUDNN_AUTOTUNE_DEFAULT=0 python3 -u ${ROOT}/train/train_model.py \
     --gpus              0,1 \
     --kv-store          device \
     --symbol            resnext \
+    --use-squeeze-excitation \
     --num-layers        101 \
     --params            ${ROOT}/train/model/imagenet1k-resnext-101-0000.params \
     --model-prefix      ${ROOT}/train/checkpoints/resnext-101-1109/resnext-101 \
