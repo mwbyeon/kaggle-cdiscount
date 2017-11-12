@@ -85,6 +85,11 @@ if __name__ == '__main__':
     parser.add_argument('--symbol', type=str, default='', help='symbol name or .json path')
     parser.add_argument('--params', type=str, default='', help='')
     parser.add_argument('--feature-layer', type=str, default='', help='')
+
+    # arguments for ResNext
+    parser.add_argument('--num-conv-groups', type=int, default=32)
+
+    # arguments for SENets
     parser.add_argument('--use-squeeze-excitation', action='store_true')
     parser.add_argument('--excitation-ratio', type=float, default=1/16)
 

@@ -30,15 +30,17 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, n
         Workspace used in convolution operator
     """
     if bottle_neck:
-        # the same as https://github.com/facebook/fb.resnet.torch#notes, a bit difference with origin paper
+        # bottleneck_ratio == 1.0 in pre-trained resnext-101-64x4d
+        bottleneck_ratio = 1.0 if num_group == 64 else 0.5
 
-        conv1 = mx.sym.Convolution(data=data, num_filter=int(num_filter * 0.5), kernel=(1, 1), stride=(1, 1),
+        # the same as https://github.com/facebook/fb.resnet.torch#notes, a bit difference with origin paper
+        conv1 = mx.sym.Convolution(data=data, num_filter=int(num_filter * bottleneck_ratio), kernel=(1, 1), stride=(1, 1),
                                    pad=(0, 0),
                                    no_bias=True, workspace=workspace, name=name + '_conv1')
         bn1 = mx.sym.BatchNorm(data=conv1, fix_gamma=False, eps=2e-5, momentum=bn_mom, name=name + '_bn1')
         act1 = mx.sym.Activation(data=bn1, act_type='relu', name=name + '_relu1')
 
-        conv2 = mx.sym.Convolution(data=act1, num_filter=int(num_filter * 0.5), num_group=num_group, kernel=(3, 3),
+        conv2 = mx.sym.Convolution(data=act1, num_filter=int(num_filter * bottleneck_ratio), num_group=num_group, kernel=(3, 3),
                                    stride=stride, pad=(1, 1),
                                    no_bias=True, workspace=workspace, name=name + '_conv2')
         bn2 = mx.sym.BatchNorm(data=conv2, fix_gamma=False, eps=2e-5, momentum=bn_mom, name=name + '_bn2')
@@ -51,13 +53,13 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, n
 
         if use_squeeze_excitation:
             squeeze = mx.sym.Pooling(data=bn3, global_pool=True, kernel=(7, 7), pool_type='avg', name=name + '_squeeze')
-            squeeze = mx.symbol.Flatten(data=squeeze, name=name + '_flatten')
-            excitation = mx.symbol.FullyConnected(data=squeeze, num_hidden=int(num_filter * excitation_ratio),
+            squeeze = mx.sym.Flatten(data=squeeze, name=name + '_flatten')
+            excitation = mx.sym.FullyConnected(data=squeeze, num_hidden=int(num_filter * excitation_ratio),
                                                   name=name + '_excitation1')
             excitation = mx.sym.Activation(data=excitation, act_type='relu', name=name + '_excitation1_relu')
-            excitation = mx.symbol.FullyConnected(data=excitation, num_hidden=num_filter, name=name + '_excitation2')
+            excitation = mx.sym.FullyConnected(data=excitation, num_hidden=num_filter, name=name + '_excitation2')
             excitation = mx.sym.Activation(data=excitation, act_type='sigmoid', name=name + '_excitation2_sigmoid')
-            bn3 = mx.symbol.broadcast_mul(bn3, mx.symbol.reshape(data=excitation, shape=(-1, num_filter, 1, 1)))
+            bn3 = mx.sym.broadcast_mul(bn3, mx.sym.reshape(data=excitation, shape=(-1, num_filter, 1, 1)))
 
         if dim_match:
             shortcut = data
@@ -85,13 +87,13 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, n
 
         if use_squeeze_excitation:
             squeeze = mx.sym.Pooling(data=bn2, global_pool=True, kernel=(7, 7), pool_type='avg', name=name + '_squeeze')
-            squeeze = mx.symbol.Flatten(data=squeeze, name=name + '_flatten')
-            excitation = mx.symbol.FullyConnected(data=squeeze, num_hidden=int(num_filter * excitation_ratio),
-                                                  name=name + '_excitation1')
+            squeeze = mx.sym.Flatten(data=squeeze, name=name + '_flatten')
+            excitation = mx.sym.FullyConnected(data=squeeze, num_hidden=int(num_filter * excitation_ratio),
+                                               name=name + '_excitation1')
             excitation = mx.sym.Activation(data=excitation, act_type='relu', name=name + '_excitation1_relu')
-            excitation = mx.symbol.FullyConnected(data=excitation, num_hidden=num_filter, name=name + '_excitation2')
+            excitation = mx.sym.FullyConnected(data=excitation, num_hidden=num_filter, name=name + '_excitation2')
             excitation = mx.sym.Activation(data=excitation, act_type='sigmoid', name=name + '_excitation2_sigmoid')
-            bn2 = mx.symbol.broadcast_mul(bn2, mx.symbol.reshape(data=excitation, shape=(-1, num_filter, 1, 1)))
+            bn2 = mx.sym.broadcast_mul(bn2, mx.sym.reshape(data=excitation, shape=(-1, num_filter, 1, 1)))
 
         if dim_match:
             shortcut = data
@@ -169,7 +171,7 @@ def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape,
     return mx.sym.SoftmaxOutput(data=fc1, name='softmax')
 
 
-def get_symbol(num_classes, num_layers, image_shape, num_group=32, conv_workspace=256, dtype='float32', **kwargs):
+def get_symbol(num_classes, num_layers, image_shape, num_conv_groups=32, conv_workspace=256, dtype='float32', **kwargs):
     """
     Adapted from https://github.com/tornadomeet/ResNet/blob/master/train_resnet.py
     Original author Wei Wu
@@ -196,6 +198,7 @@ def get_symbol(num_classes, num_layers, image_shape, num_group=32, conv_workspac
         else:
             filter_list = [64, 64, 128, 256, 512]
             bottle_neck = False
+
         num_stages = 4
         if num_layers == 18:
             units = [2, 2, 2, 2]
@@ -218,7 +221,7 @@ def get_symbol(num_classes, num_layers, image_shape, num_group=32, conv_workspac
                    num_stages=num_stages,
                    filter_list=filter_list,
                    num_classes=num_classes,
-                   num_group=num_group,
+                   num_group=num_conv_groups,
                    image_shape=image_shape,
                    bottle_neck=bottle_neck,
                    workspace=conv_workspace,

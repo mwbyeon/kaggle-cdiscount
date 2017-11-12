@@ -108,7 +108,9 @@ def fit(args, network, data_loader, **kwargs):
     # logging
     head = '%(asctime)-15s Node[' + str(kv.rank) + '] %(message)s'
     logging.basicConfig(level=logging.DEBUG, format=head)
-    logging.info('start with arguments %s', args)
+    logging.info('start with arguments')
+    for k, v in vars(args).items():
+        logging.info('  {}: {}'.format(k, v))
 
     # data iterators
     (train, val) = data_loader(args, kv)
@@ -121,7 +123,6 @@ def fit(args, network, data_loader, **kwargs):
                 logging.info('Batch [%d]\tSpeed: %.2f samples/sec' % (
                     i, args.disp_batches * args.batch_size / (time.time() - tic)))
                 tic = time.time()
-
         return
 
     # load model
@@ -174,8 +175,8 @@ def fit(args, network, data_loader, **kwargs):
         # AlexNet will not converge using Xavier
         initializer = mx.init.Normal()
     else:
-        initializer = mx.init.Xavier(rnd_type='gaussian', factor_type="in", magnitude=2)
-    # initializer   = mx.init.Xavier(factor_type="in", magnitude=2.34),
+        initializer = mx.init.MSRAPrelu(factor_type='avg', slope=0.25)
+        # initializer = mx.init.Xavier(rnd_type='gaussian', factor_type="in", magnitude=2)
 
     # evaluation metrices
     eval_metrics = args.eval_metrics
