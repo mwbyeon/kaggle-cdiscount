@@ -165,7 +165,7 @@ def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape,
 
     pool1 = mx.sym.Pooling(data=body, global_pool=True, kernel=(7, 7), pool_type='avg', name='pool1')
     flat = mx.sym.Flatten(data=pool1)
-    fc1 = mx.sym.FullyConnected(data=flat, num_hidden=num_classes, name='fc1')
+    fc1 = mx.sym.FullyConnected(data=flat, num_hidden=num_classes, name='fc')
     if dtype == 'float16':
         fc1 = mx.sym.Cast(data=fc1, dtype=np.float32)
     return mx.sym.SoftmaxOutput(data=fc1, name='softmax')
