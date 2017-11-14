@@ -40,13 +40,16 @@ def load_symbol_params(symbol_path, params_path):
     return load_symbol(symbol_path) + load_params(params_path)
 
 
-def get_finetune_model(symbol, arg_params, aux_params, num_classes, feature_layer_name, smooth_alpha):
-    logging.info('fine-tune to {} classes from {} layer'.format(num_classes, feature_layer_name))
+def get_finetune_model(symbol, arg_params, aux_params, num_classes, feature_layer, dropout_ratio, smooth_alpha, **kwargs):
+    logging.info('fine-tune to {} classes from {} layer'.format(num_classes, feature_layer))
     all_layers = symbol.get_internals()
-    net = all_layers[feature_layer_name + '_output']  # embedding
     label = mx.sym.Variable('softmax_label')
-    net = mx.symbol.FullyConnected(data=net, num_hidden=num_classes, name='fc')
-    new_symbol = mx.symbol.SoftmaxOutput(data=net, label=label, name='softmax', smooth_alpha=smooth_alpha)
+    net = all_layers[feature_layer + '_output']  # embedding
+    if dropout_ratio is not None and dropout_ratio > 0.0:
+        net = mx.sym.Dropout(net, p=dropout_ratio)
+
+    net = mx.sym.FullyConnected(data=net, num_hidden=num_classes, name='fc')
+    new_symbol = mx.sym.SoftmaxOutput(data=net, label=label, name='softmax', smooth_alpha=smooth_alpha)
 
     new_arg_params = dict({k: arg_params[k] for k in arg_params if 'fc' not in k})
     return new_symbol, new_arg_params, aux_params
@@ -64,7 +67,7 @@ def train(args):
         arg_params, aux_params = load_params(args.params)
 
     if args.feature_layer:
-        symbol, arg_params, aux_params = get_finetune_model(symbol, arg_params, aux_params, args.num_classes, args.feature_layer, args.smooth_alpha)
+        symbol, arg_params, aux_params = get_finetune_model(symbol, arg_params, aux_params, **vars(args))
 
     fit.fit(args=args,
             network=symbol,
@@ -86,6 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('--params', type=str, default='', help='.params path for fine-tuning')
     parser.add_argument('--feature-layer', type=str, default='', help='for fine-tuning')
     parser.add_argument('--smooth-alpha', type=float, default=0.0, help='label smoothing')
+    parser.add_argument('--dropout-ratio', type=float, default=None, help='use dropout')
 
     # arguments for ResNext
     parser.add_argument('--num-conv-groups', type=int, default=32)
