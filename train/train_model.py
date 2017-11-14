@@ -40,13 +40,13 @@ def load_symbol_params(symbol_path, params_path):
     return load_symbol(symbol_path) + load_params(params_path)
 
 
-def get_finetune_model(symbol, arg_params, aux_params, num_classes, feature_layer_name):
+def get_finetune_model(symbol, arg_params, aux_params, num_classes, feature_layer_name, smooth_alpha):
     logging.info('fine-tune to {} classes from {} layer'.format(num_classes, feature_layer_name))
     all_layers = symbol.get_internals()
     net = all_layers[feature_layer_name + '_output']  # embedding
     label = mx.sym.Variable('softmax_label')
     net = mx.symbol.FullyConnected(data=net, num_hidden=num_classes, name='fc')
-    new_symbol = mx.symbol.SoftmaxOutput(data=net, label=label, name='softmax')
+    new_symbol = mx.symbol.SoftmaxOutput(data=net, label=label, name='softmax', smooth_alpha=smooth_alpha)
 
     new_arg_params = dict({k: arg_params[k] for k in arg_params if 'fc' not in k})
     return new_symbol, new_arg_params, aux_params
@@ -83,8 +83,9 @@ if __name__ == '__main__':
     data.add_data_aug_args(parser)
 
     parser.add_argument('--symbol', type=str, default='', help='symbol name or .json path')
-    parser.add_argument('--params', type=str, default='', help='')
-    parser.add_argument('--feature-layer', type=str, default='', help='')
+    parser.add_argument('--params', type=str, default='', help='.params path for fine-tuning')
+    parser.add_argument('--feature-layer', type=str, default='', help='for fine-tuning')
+    parser.add_argument('--smooth-alpha', type=float, default=0.0, help='label smoothing')
 
     # arguments for ResNext
     parser.add_argument('--num-conv-groups', type=int, default=32)

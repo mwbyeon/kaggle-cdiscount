@@ -111,7 +111,7 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, n
 
 
 def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape, bottle_neck=True, bn_mom=0.9,
-            workspace=256, dtype='float32', memonger=False, use_squeeze_excitation=False, excitation_ratio=None):
+            workspace=256, dtype='float32', memonger=False, use_squeeze_excitation=False, excitation_ratio=None, smooth_alpha=0.0):
     """Return ResNeXt symbol of
     Parameters
     ----------
@@ -168,10 +168,11 @@ def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape,
     fc1 = mx.sym.FullyConnected(data=flat, num_hidden=num_classes, name='fc')
     if dtype == 'float16':
         fc1 = mx.sym.Cast(data=fc1, dtype=np.float32)
-    return mx.sym.SoftmaxOutput(data=fc1, name='softmax')
+    return mx.sym.SoftmaxOutput(data=fc1, name='softmax', smooth_alpha=smooth_alpha)
 
 
-def get_symbol(num_classes, num_layers, image_shape, num_conv_groups=32, conv_workspace=256, dtype='float32', **kwargs):
+def get_symbol(num_classes, num_layers, image_shape, num_conv_groups=32, conv_workspace=256, dtype='float32',
+               use_squeeze_excitation=False, excitation_ratio=None, smooth_alpha=0.0, **kwargs):
     """
     Adapted from https://github.com/tornadomeet/ResNet/blob/master/train_resnet.py
     Original author Wei Wu
@@ -226,5 +227,7 @@ def get_symbol(num_classes, num_layers, image_shape, num_conv_groups=32, conv_wo
                    bottle_neck=bottle_neck,
                    workspace=conv_workspace,
                    dtype=dtype,
-                   use_squeeze_excitation=kwargs['use_squeeze_excitation'],
-                   excitation_ratio=kwargs['excitation_ratio'])
+                   use_squeeze_excitation=use_squeeze_excitation,
+                   excitation_ratio=excitation_ratio,
+                   smooth_alpha=smooth_alpha
+                   )
