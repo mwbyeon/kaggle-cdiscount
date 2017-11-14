@@ -64,7 +64,7 @@ def train(args):
         arg_params, aux_params = load_params(args.params)
 
     if args.feature_layer:
-        symbol, arg_params, aux_params = get_finetune_model(symbol, arg_params, aux_params, args.num_classes, args.feature_layer)
+        symbol, arg_params, aux_params = get_finetune_model(symbol, arg_params, aux_params, args.num_classes, args.feature_layer, args.smooth_alpha)
 
     fit.fit(args=args,
             network=symbol,
