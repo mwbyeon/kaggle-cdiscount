@@ -40,9 +40,9 @@ def load_symbol_params(symbol_path, params_path):
     return load_symbol(symbol_path) + load_params(params_path)
 
 
-def get_finetune_model(symbol, arg_params, aux_params, num_classes, feature_layer, dropout_ratio, smooth_alpha, **kwargs):
+def get_finetune_model(base_symbol, arg_params, aux_params, num_classes, feature_layer, dropout_ratio, smooth_alpha, **kwargs):
     logging.info('fine-tune to {} classes from {} layer'.format(num_classes, feature_layer))
-    all_layers = symbol.get_internals()
+    all_layers = base_symbol.get_internals()
     label = mx.sym.Variable('softmax_label')
     net = all_layers[feature_layer + '_output']  # embedding
     if dropout_ratio is not None and dropout_ratio > 0.0:
