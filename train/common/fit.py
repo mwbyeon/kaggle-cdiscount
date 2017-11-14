@@ -161,7 +161,7 @@ def fit(args, network, data_loader, **kwargs):
             'lr_scheduler': lr_scheduler,
             'multi_precision': True
         }
-    elif args.optimizer == 'adam':
+    elif args.optimizer == 'adam' or args.optimizer == 'nadam':
         optimizer_params = {
             'learning_rate': lr,
             'lr_scheduler': lr_scheduler,
