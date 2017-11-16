@@ -44,7 +44,7 @@ def read_images(args):
         for img in images:
             img_bytes = img['picture']
             h = hashlib.md5(img_bytes).hexdigest()
-            if md5_dict is not None and h not in md5_dict:
+            if md5_dict is not None and len(md5_dict.get(h, [])) != 1:  # save only single label
                 continue
             if args.unique_md5:
                 if h in used_md5_set:
