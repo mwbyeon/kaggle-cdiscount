@@ -42,6 +42,7 @@ class Tester(object):
                 self._aux_params[name] = v
 
         if mean_max_pooling:
+            # https://github.com/cypw/DPNs#mean-max-pooling
             logging.info('Add Mean-Max Pooling Layer..')
             sym_softmax = mx.symbol.load(symbol_path)
             sym_pool, sym_fc = None, None
@@ -366,6 +367,8 @@ def _func_processor(args):
     ext_socket.set_hwm(args.batch_size)
     ext_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
 
+    data_shape = [int(x) for x in args.data_shape.split(',')]
+
     while True:
         items = zmq_socket.recv_pyobj()
         if items is None:
@@ -375,6 +378,8 @@ def _func_processor(args):
         images = []
         for _, img_bytes, product_id in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+            if args.resize > 0:
+                img = cv2.resize(img, (args.resize, args.resize), interpolation=cv2.INTER_CUBIC)
             if args.multi_view >= 0:  # 0.778900
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 images.append((_hwc_to_chw(img), product_id, img_bytes))
@@ -382,11 +387,12 @@ def _func_processor(args):
                 img_flip = cv2.flip(img, flipCode=1)
                 images.append((_hwc_to_chw(img_flip), product_id, img_bytes))
             if args.multi_view >= 2:  # 0.781000 (+0.0001)
-                img_crop = cv2.resize(img[10:170, 10:170, :], (180, 180))
+                img_crop = cv2.resize(img[10:img.rows-10, 10:img.cols-10, :], data_shape[1:])
                 images.append((_hwc_to_chw(img_crop), product_id, img_bytes))
             if args.multi_view >= 3:  # 0.781700 (+0.0007)
                 img_flip = cv2.flip(img, flipCode=0)
                 images.append((_hwc_to_chw(img_flip), product_id, img_bytes))
+
         ext_socket.send_pyobj(images)
 
 
@@ -427,11 +433,12 @@ if __name__ == '__main__':
     parser.add_argument('--cate-level', type=int, default=3)
     parser.add_argument('--md5-dict-pkl', type=str, default='')
     parser.add_argument('--md5-dict-type', type=str, choices=['none', 'unique', 'majority', 'l1', 'l2', 'softmax'])
+    parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--multi-view', type=int, default=0)
     parser.add_argument('--multi-view-mean', type=str, choices=['arithmetic', 'geometric'], default='arithmetic')
     parser.add_argument('--product-unique-md5', action='store_true')
 
-    parser.add_argument('--mean-max-pooling', action='store_true')
+    parser.add_argument('--mean-max-pooling', type=int, deafult=0)
     parser.add_argument('--pool-name', type=str, default='pool1')
     parser.add_argument('--fc-name', type=str, default='fc')
 
