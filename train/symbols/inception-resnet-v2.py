@@ -8,6 +8,18 @@ Christian Szegedy, Sergey Ioffe, Vincent Vanhoucke, Alex Alemi
 import mxnet as mx
 
 
+def squeeze_excitation_block(name, data, num_filter, ratio):
+    squeeze = mx.sym.Pooling(data=data, global_pool=True, kernel=(7, 7), pool_type='avg', name=name + '_squeeze')
+    squeeze = mx.symbol.Flatten(data=squeeze, name=name + '_flatten')
+    excitation = mx.symbol.FullyConnected(data=squeeze, num_hidden=int(num_filter * ratio), name=name + '_excitation1')
+    excitation = mx.sym.Activation(data=excitation, act_type='relu', name=name + '_excitation1_relu')
+    excitation = mx.symbol.FullyConnected(data=excitation, num_hidden=num_filter, name=name + '_excitation2')
+    excitation = mx.sym.Activation(data=excitation, act_type='sigmoid', name=name + '_excitation2_sigmoid')
+    scale = mx.symbol.broadcast_mul(data, mx.symbol.reshape(data=excitation, shape=(-1, num_filter, 1, 1)))
+
+    return scale
+
+
 def ConvFactory(data, num_filter, kernel, stride=(1, 1), pad=(0, 0), act_type="relu", mirror_attr={}, with_act=True):
     conv = mx.symbol.Convolution(
         data=data, num_filter=num_filter, kernel=kernel, stride=stride, pad=pad)
@@ -31,7 +43,7 @@ def block35(net, input_num_channels, scale=1.0, with_act=True, act_type='relu', 
     tower_out = ConvFactory(
         tower_mixed, input_num_channels, (1, 1), with_act=False)
 
-    net += scale * tower_out
+    net = net + scale * tower_out
     if with_act:
         act = mx.symbol.Activation(
             data=net, act_type=act_type, attr=mirror_attr)
@@ -48,7 +60,7 @@ def block17(net, input_num_channels, scale=1.0, with_act=True, act_type='relu', 
     tower_mixed = mx.symbol.Concat(*[tower_conv, tower_conv1_2])
     tower_out = ConvFactory(
         tower_mixed, input_num_channels, (1, 1), with_act=False)
-    net += scale * tower_out
+    net = net + scale * tower_out
     if with_act:
         act = mx.symbol.Activation(
             data=net, act_type=act_type, attr=mirror_attr)
@@ -65,7 +77,7 @@ def block8(net, input_num_channels, scale=1.0, with_act=True, act_type='relu', m
     tower_mixed = mx.symbol.Concat(*[tower_conv, tower_conv1_2])
     tower_out = ConvFactory(
         tower_mixed, input_num_channels, (1, 1), with_act=False)
-    net += scale * tower_out
+    net = net + scale * tower_out
     if with_act:
         act = mx.symbol.Activation(
             data=net, act_type=act_type, attr=mirror_attr)
@@ -74,14 +86,18 @@ def block8(net, input_num_channels, scale=1.0, with_act=True, act_type='relu', m
         return net
 
 
-def repeat(inputs, repetitions, layer, *args, **kwargs):
+def repeat(inputs, repetitions, layer, use_squeeze_excitation, *args, **kwargs):
     outputs = inputs
+    name = layer.__name__
     for i in range(repetitions):
         outputs = layer(outputs, *args, **kwargs)
+        if use_squeeze_excitation:
+            num_filter = kwargs.get('input_num_channels')
+            outputs = squeeze_excitation_block(name + ('_%d' % i), outputs, num_filter, 1/16)
     return outputs
 
 
-def get_symbol(num_classes=1000, **kwargs):
+def get_symbol(num_classes, dropout_ratio=0.2, use_squeeze_excitation=False, **kwargs):
     data = mx.symbol.Variable(name='data')
     conv1a_3_3 = ConvFactory(data=data, num_filter=32,
                              kernel=(3, 3), stride=(2, 2))
@@ -107,7 +123,7 @@ def get_symbol(num_classes=1000, **kwargs):
     tower_conv3_1 = ConvFactory(tower_pool3_0, 64, (1, 1))
     tower_5b_out = mx.symbol.Concat(
         *[tower_conv, tower_conv1_1, tower_conv2_2, tower_conv3_1])
-    net = repeat(tower_5b_out, 10, block35, scale=0.17, input_num_channels=320)
+    net = repeat(tower_5b_out, 10, block35, use_squeeze_excitation, scale=0.17, input_num_channels=320)
     tower_conv = ConvFactory(net, 384, (3, 3), stride=(2, 2))
     tower_conv1_0 = ConvFactory(net, 256, (1, 1))
     tower_conv1_1 = ConvFactory(tower_conv1_0, 256, (3, 3), pad=(1, 1))
@@ -115,7 +131,7 @@ def get_symbol(num_classes=1000, **kwargs):
     tower_pool = mx.symbol.Pooling(net, kernel=(
         3, 3), stride=(2, 2), pool_type='max')
     net = mx.symbol.Concat(*[tower_conv, tower_conv1_2, tower_pool])
-    net = repeat(net, 20, block17, scale=0.1, input_num_channels=1088)
+    net = repeat(net, 20, block17, use_squeeze_excitation, scale=0.1, input_num_channels=1088)
     tower_conv = ConvFactory(net, 256, (1, 1))
     tower_conv0_1 = ConvFactory(tower_conv, 384, (3, 3), stride=(2, 2))
     tower_conv1 = ConvFactory(net, 256, (1, 1))
@@ -128,14 +144,15 @@ def get_symbol(num_classes=1000, **kwargs):
     net = mx.symbol.Concat(
         *[tower_conv0_1, tower_conv1_1, tower_conv2_2, tower_pool])
 
-    net = repeat(net, 9, block8, scale=0.2, input_num_channels=2080)
+    net = repeat(net, 9, block8, use_squeeze_excitation, scale=0.2, input_num_channels=2080)
     net = block8(net, with_act=False, input_num_channels=2080)
 
     net = ConvFactory(net, 1536, (1, 1))
     net = mx.symbol.Pooling(net, kernel=(
         1, 1), global_pool=True, stride=(2, 2), pool_type='avg')
     net = mx.symbol.Flatten(net)
-    net = mx.symbol.Dropout(data=net, p=0.2)
+    if dropout_ratio > 0.0:
+        net = mx.symbol.Dropout(data=net, p=dropout_ratio)
     net = mx.symbol.FullyConnected(data=net, num_hidden=num_classes)
     softmax = mx.symbol.SoftmaxOutput(data=net, name='softmax')
     return softmax
