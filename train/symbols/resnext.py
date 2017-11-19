@@ -111,7 +111,7 @@ def residual_unit(data, num_filter, stride, dim_match, name, bottle_neck=True, n
 
 
 def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape, bottle_neck=True, bn_mom=0.9,
-            workspace=256, dtype='float32', memonger=False, use_squeeze_excitation=False, excitation_ratio=None, smooth_alpha=0.0):
+            workspace=256, dtype='float32', memonger=False, use_squeeze_excitation=False, excitation_ratio=None, smooth_alpha=0.0, dropout_ratio=0.0):
     """Return ResNeXt symbol of
     Parameters
     ----------
@@ -165,6 +165,8 @@ def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape,
 
     pool1 = mx.sym.Pooling(data=body, global_pool=True, kernel=(7, 7), pool_type='avg', name='pool1')
     flat = mx.sym.Flatten(data=pool1)
+    if dropout_ratio is not None and dropout_ratio > 0.0:
+        flat = mx.sym.Dropout(flat, p=dropout_ratio)
     fc1 = mx.sym.FullyConnected(data=flat, num_hidden=num_classes, name='fc')
     if dtype == 'float16':
         fc1 = mx.sym.Cast(data=fc1, dtype=np.float32)
@@ -172,7 +174,7 @@ def resnext(units, num_stages, filter_list, num_classes, num_group, image_shape,
 
 
 def get_symbol(num_classes, num_layers, image_shape, num_conv_groups=32, conv_workspace=256, dtype='float32',
-               use_squeeze_excitation=False, excitation_ratio=None, smooth_alpha=0.0, **kwargs):
+               use_squeeze_excitation=False, excitation_ratio=None, smooth_alpha=0.0, dropout_ratio=0.0, **kwargs):
     """
     Adapted from https://github.com/tornadomeet/ResNet/blob/master/train_resnet.py
     Original author Wei Wu
@@ -229,5 +231,6 @@ def get_symbol(num_classes, num_layers, image_shape, num_conv_groups=32, conv_wo
                    dtype=dtype,
                    use_squeeze_excitation=use_squeeze_excitation,
                    excitation_ratio=excitation_ratio,
-                   smooth_alpha=smooth_alpha
+                   smooth_alpha=smooth_alpha,
+                   dropout_ratio=dropout_ratio,
                    )
