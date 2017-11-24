@@ -32,9 +32,9 @@ def get_category_dict():
                         'cate1_class_id': cate1_counter,
                         'child_cate3': dict(),
                     }
-                    cate1_counter += 1
                     cate1_dict[cate1_names] = v
                     cate1_dict[v['cate1_class_id']] = v
+                    cate1_counter += 1
 
                 if cate_id not in cate1_dict[cate1_names]['child_cate3']:
                     cate1_dict[cate1_names]['child_cate3'][cate_id] = len(cate1_dict[cate1_names]['child_cate3'])
@@ -52,15 +52,15 @@ def get_category_dict():
                         'cate1_class_id': cate1_dict[cate1_names]['child_cate3'][cate_id],
                         'cate3_class_id': cate3_counter,
                     }
-                    cate3_counter += 1
                     cate3_dict[cate3_names] = v
                     cate3_dict[cate_id] = v
                     cate3_dict[cate3_counter] = v
+                    cate3_counter += 1
 
             except Exception as e:
                 logging.error('cannot parse a line: {}, {}'.format(row, e))
     logging.info('cate1: {} categories'.format(len(cate1_dict)))
-    logging.info('cate3: {} categories'.format(len(cate3_dict) // 2))
+    logging.info('cate3: {} categories'.format(len(cate3_dict) // 3))
     return cate1_dict, cate2_dict, cate3_dict
 
 

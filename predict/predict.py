@@ -216,6 +216,8 @@ def _func_predict(args):
         for d in bson.decode_file_iter(reader):
             prod_id = d.get('_id')
             cate_id = d.get('category_id')
+            if cate_id is None:
+                continue
             cate1, cate2, cate3 = cate3_dict[cate_id]['names']
             if args.cate_level == 1:
                 ground_truths[prod_id] = cate1_dict[(cate1,)]['child_cate3'][cate_id]
@@ -281,15 +283,16 @@ def _func_predict(args):
             __t2 = time.time()
             for _id, prob in probs_dict.items():
                 pred = int(np.argmax(prob))
-                label = ground_truths[_id]
-                catetory_count_dict[label] += 1
-                if label == pred:  # correct
-                    correct_count += 1
-                    correct_count_dict[label] += 1
-                else:
-                    incorrect_count_dict[label][pred] += 1
+                if _id in ground_truths:
+                    label = ground_truths.get(_id)
+                    catetory_count_dict[label] += 1
+                    if label == pred:  # correct
+                        correct_count += 1
+                        correct_count_dict[label] += 1
+                    else:
+                        incorrect_count_dict[label][pred] += 1
                 if writer:
-                    cate_id = cate3_dict[pred]['cate3_class_id'] if args.cate_level == 3 else pred
+                    cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
                     writer.write('{0:d},{1:d}\n'.format(_id, cate_id))
                     writer.flush()
             __t3 = time.time()
@@ -314,15 +317,16 @@ def _func_predict(args):
     __t2 = time.time()
     for _id, prob in probs_dict.items():
         pred = int(np.argmax(prob))
-        label = ground_truths[_id]
-        catetory_count_dict[label] += 1
-        if label == pred:  # correct
-            correct_count += 1
-            correct_count_dict[label] += 1
-        else:
-            incorrect_count_dict[label][pred] += 1
+        if _id in ground_truths:
+            label = ground_truths[_id]
+            catetory_count_dict[label] += 1
+            if label == pred:  # correct
+                correct_count += 1
+                correct_count_dict[label] += 1
+            else:
+                incorrect_count_dict[label][pred] += 1
         if writer:
-            cate_id = cate3_dict[pred]['cate3_class_id'] if args.cate_level == 3 else pred
+            cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
             writer.write('{0:d},{1:d}\n'.format(_id, cate_id))
             writer.flush()
     __t3 = time.time()
