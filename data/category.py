@@ -26,6 +26,7 @@ def get_category_dict():
                 cate2_names = (cate1, cate2)
                 cate3_names = (cate1, cate2, cate3)
 
+                # cate1
                 if cate1_names not in cate1_dict:
                     v = {
                         'names': cate1_names,
@@ -33,23 +34,30 @@ def get_category_dict():
                         'child_cate3': dict(),
                     }
                     cate1_dict[cate1_names] = v
-                    cate1_dict[v['cate1_class_id']] = v
+                    cate1_dict[cate1_counter] = v
                     cate1_counter += 1
 
                 if cate_id not in cate1_dict[cate1_names]['child_cate3']:
                     cate1_dict[cate1_names]['child_cate3'][cate_id] = len(cate1_dict[cate1_names]['child_cate3'])
 
+                # cate2
                 if cate2_names not in cate2_dict:
                     v = {
                         'names': cate2_names,
+                        'cate2_class_id': cate2_counter,
                     }
                     cate2_dict[cate2_names] = v
+                    cate2_dict[cate2_counter] = v
+                    cate2_counter += 1
 
+                # cate3
                 if cate3_names not in cate3_dict:
                     v = {
-                        'names': cate3_names,
-                        'cate_id': cate_id,
-                        'cate1_class_id': cate1_dict[cate1_names]['child_cate3'][cate_id],
+                        'names': cate3_names,  # e.g) ('VIN - ALCOOL - LIQUIDES', 'VIN', 'ASSORTIMENT VIN')
+                        'cate_id': cate_id,  # e.g) 1000003530
+                        'cate1_sub_class_id': cate1_dict[cate1_names]['child_cate3'][cate_id],
+                        'cate1_class_id': cate1_dict[cate1_names]['cate1_class_id'],
+                        'cate2_class_id': cate2_dict[cate2_names]['cate2_class_id'],
                         'cate3_class_id': cate3_counter,
                     }
                     cate3_dict[cate3_names] = v
@@ -88,7 +96,17 @@ def __category_csv_to_dict(category_csv):
 if __name__ == '__main__':
     cate1_dict, cate2_dict, cate3_dict = get_category_dict()
 
+    print('---- cate1 {}-----'.format(len(cate1_dict)))
     for cate1, value in cate1_dict.items():
-        print('[{:02d}] {}'.format(value['cate1_class_id'], cate1))
-        print(' - child_cate3: {}'.format(len(value['child_cate3'])))
-        print()
+        # print('[{:02d}] {}'.format(value['cate1_class_id'], cate1))
+        # print(' - child_cate3: {}'.format(len(value['child_cate3'])))
+        print( value)
+
+    print('---- cate2 {}-----'.format(len(cate2_dict)))
+    for cate2, value in cate2_dict.items():
+        print( value )
+
+    print('---- cate3 {}-----'.format(len(cate3_dict)))
+    for cate3, value in cate3_dict.items():
+        print( value )
+

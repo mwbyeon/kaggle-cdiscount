@@ -32,16 +32,16 @@ def main(args):
     for i, prod in tqdm(enumerate(data), unit='products', total=total_count, ascii=True):
         category_id = prod.get('category_id', None)  # This won't be in Test data
         cate1, cate2, cate3 = cate3_dict[category_id]['names']
-        if cate1_dict[(cate1,)]['cate1_class_id'] in args.include:
+        if cate1_dict[(cate1,)]['cate1_sub_class_id'] in args.include:
             category_products[cate1].append(prod)
 
     logging.info('{} categories'.format(len(category_products)))
     bson_filename, _ = os.path.splitext(os.path.basename(args.bson))
     for cate1 in category_products:
         prods = category_products[cate1]
-        cate1_class_id = cate1_dict[(cate1,)]['cate1_class_id']
-        logging.info(' [{:02d}] {}: {}'.format(cate1_class_id, cate1, len(prods)))
-        save_path = os.path.join(args.save_to, '{}_{:02d}.bson'.format(bson_filename, cate1_class_id))
+        cate1_sub_class_id = cate1_dict[(cate1,)]['cate1_sub_class_id']
+        logging.info(' [{:02d}] {}: {}'.format(cate1_sub_class_id, cate1, len(prods)))
+        save_path = os.path.join(args.save_to, '{}_{:02d}.bson'.format(bson_filename, cate1_sub_class_id))
         encode_dict_list(prods, save_path)
 
 

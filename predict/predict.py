@@ -169,29 +169,29 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=
                         if md5_type == 'unique' and len(md5_dict[h]) == 1:  # BEST!
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
-                            class_id = cate3_dict[most_label]['cate1_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
+                            class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
                             p[class_id] = 1.0
                         elif md5_type == 'majority':
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
-                            class_id = cate3_dict[most_label]['cate1_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
+                            class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
                             p[class_id] = 1.0
                         elif md5_type == 'l1':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
-                                class_id = cate3_dict[cate]['cate1_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
+                                class_id = cate3_dict[cate]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
                                 p[class_id] = cnt
                             p /= sum(list(md5_dict[h].values()))
                         elif md5_type == 'l2':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
-                                class_id = cate3_dict[cate]['cate1_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
+                                class_id = cate3_dict[cate]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
                                 p[class_id] = cnt
                             p /= np.linalg.norm(list(md5_dict[h].values()))
                         elif md5_type == 'softmax':
                             p = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
-                                class_id = cate3_dict[cate]['cate1_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
+                                class_id = cate3_dict[cate]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
                                 p[class_id] = cnt
                             e_p = np.exp(p - np.max(p))
                             p = e_p / e_p.sum()
