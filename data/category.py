@@ -67,7 +67,8 @@ def get_category_dict():
 
             except Exception as e:
                 logging.error('cannot parse a line: {}, {}'.format(row, e))
-    logging.info('cate1: {} categories'.format(len(cate1_dict)))
+    logging.info('cate1: {} categories'.format(len(cate1_dict) // 2))
+    logging.info('cate2: {} categories'.format(len(cate2_dict) // 2))
     logging.info('cate3: {} categories'.format(len(cate3_dict) // 3))
     return cate1_dict, cate2_dict, cate3_dict
 
