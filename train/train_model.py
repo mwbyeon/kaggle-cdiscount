@@ -98,11 +98,11 @@ if __name__ == '__main__':
     parser.add_argument('--use-squeeze-excitation', action='store_true')
     parser.add_argument('--excitation-ratio', type=float, default=1/16)
 
-    # for squeeze-and-excitation
-    args = parser.parse_args()
-
     # categorical
     parser.add_argument('--categorical', type=int, default=0)
+
+    # for squeeze-and-excitation
+    args = parser.parse_args()
 
     train(args)
 
