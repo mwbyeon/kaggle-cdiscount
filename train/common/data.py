@@ -210,9 +210,9 @@ class CategoricalImageRecordIter:
     @property
     def provide_label(self):
         # (batch_size,)
-        return [DataDesc(name='cate1_softmax_label', shape=self._rec_iter.provide_label),
-                DataDesc(name='cate2_softmax_label', shape=self._rec_iter.provide_label),
-                DataDesc(name='cate3_softmax_label', shape=self._rec_iter.provide_label)]
+        return [DataDesc(name='cate1_softmax_label', shape=self._rec_iter.provide_label.shape),
+                DataDesc(name='cate2_softmax_label', shape=self._rec_iter.provide_label.shape),
+                DataDesc(name='cate3_softmax_label', shape=self._rec_iter.provide_label.shape)]
 
     def getdata(self):
         return self._rec_iter.data
