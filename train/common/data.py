@@ -1,6 +1,15 @@
+# -*- coding: utf-8 -*-
+
+
+import os
+import sys
+
 import mxnet as mx
-from mxnet.io import DataBatch, DataIter
+from mxnet.io import DataBatch, DataIter, DataDesc
 import numpy as np
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data.category import get_category_dict
 
 
 def add_data_args(parser):
@@ -168,3 +177,56 @@ def get_rec_iter(args, kv=None):
         num_parts=nworker,
         part_index=rank)
     return train, val
+
+
+class CategoricalImageRecordIter:
+    def __init__(self, rec_iter):
+        self._rec_iter = rec_iter
+        cate1_dict, cate2_dict, cate3_dict = get_category_dict()
+        self._cate3_dict = cate3_dict
+
+    def next(self):
+        if self._rec_iter.iter_next():
+            batch = self._rec_iter.next()
+            cate3_label = batch.label[0]
+            cate1_label = np.zeros(cate3_label.shape, dtype=np.float32)
+            cate2_label = np.zeros(cate3_label.shape, dtype=np.float32)
+            for i, x in enumerate(cate3_label):
+                cate1_label[i] = self._cate3_dict[int(x)]['cate1_class_id']
+                cate2_label[i] = self._cate3_dict[int(x)]['cate2_class_id']
+            batch.label = [cate1_label, cate2_label, cate3_label]
+            batch.provide_label = self.provide_label
+            return batch
+        else:
+            raise StopIteration
+
+    def reset(self):
+        self._rec_iter.reset()
+
+    @property
+    def provide_data(self):
+        return self._rec_iter.provide_data
+
+    @property
+    def provide_label(self):
+        # (batch_size,)
+        return [DataDesc(name='cate1_softmax_label', shape=self._rec_iter.provide_label),
+                DataDesc(name='cate2_softmax_label', shape=self._rec_iter.provide_label),
+                DataDesc(name='cate3_softmax_label', shape=self._rec_iter.provide_label)]
+
+    def getdata(self):
+        return self._rec_iter.data
+
+    def getlabel(self):
+        return self._rec_iter.label
+
+    def getindex(self):
+        return self._rec_iter.index
+
+    def getpad(self):
+        return self._rec_iter.pad
+
+
+def get_categorical_rec_iter(args, kv=None):
+    train, val = get_rec_iter(args, kv)
+    return CategoricalImageRecordIter(train), CategoricalImageRecordIter(val)

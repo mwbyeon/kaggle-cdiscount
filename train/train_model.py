@@ -71,7 +71,7 @@ def train(args):
 
     fit.fit(args=args,
             network=symbol,
-            data_loader=data.get_rec_iter,
+            data_loader=data.get_categorical_rec_iter if args.categorical else data.get_rec_iter,
             arg_params=arg_params,
             aux_params=aux_params)
 
@@ -100,6 +100,9 @@ if __name__ == '__main__':
 
     # for squeeze-and-excitation
     args = parser.parse_args()
+
+    # categorical
+    parser.add_argument('--categorical', type=int, default=0)
 
     train(args)
 
