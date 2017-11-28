@@ -71,8 +71,10 @@ def resnet(units, num_stages, filter_list, num_classes, image_shape,
                                  bottle_neck=bottle_neck, workspace=workspace, memonger=memonger)
 
         k = i - (num_stages - 4)
+        grad_scales = [-1, 0., 0., 1.0]
+        num_classes = [-1, 49, 486, 5270]
         if k in [1, 2, 3]:
-            softmax_group.append(classifier(body, num_classes, bn_mom, dtype, name='cate{}'.format(k), grad_scale=1/3))
+            softmax_group.append(classifier(body, num_classes[k], bn_mom, dtype, name='cate{}'.format(k), grad_scale=grad_scales[k]))
     assert len(softmax_group) == 3
     return mx.sym.Group(softmax_group)
 
