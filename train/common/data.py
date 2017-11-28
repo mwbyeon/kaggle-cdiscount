@@ -179,14 +179,12 @@ def get_rec_iter(args, kv=None):
     return train, val
 
 
-class CategoricalImageRecordIter:
+class CategoricalImageRecordIter(mx.io.DataIter):
     def __init__(self, rec_iter):
+        super(CategoricalImageRecordIter, self).__init__()
         self._rec_iter = rec_iter
         cate1_dict, cate2_dict, cate3_dict = get_category_dict()
         self._cate3_dict = cate3_dict
-
-    def __next__(self):
-        return self.next()
 
     def next(self):
         if self._rec_iter.iter_next():
