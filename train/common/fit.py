@@ -147,8 +147,8 @@ def fit(args, network, data_loader, **kwargs):
     # create model
     model = mx.mod.Module(
         context=devs,
-        data_names=[args.data_name],
-        label_names=[args.label_name],
+        data_names=args.data_name.split(','),
+        label_names=args.label_name.split(','),
         symbol=network
     )
 

@@ -17,7 +17,8 @@ def classifier(feat, num_classes, bn_mom, dtype, name, grad_scale=1.0):
     fc1 = mx.sym.FullyConnected(data=flat, num_hidden=num_classes, name=name + 'fc1')
     if dtype == 'float16':
         fc1 = mx.sym.Cast(data=fc1, dtype=np.float32)
-    return mx.sym.SoftmaxOutput(data=fc1, label=name + '_softmax_label', name=name + '_softmax', grad_scale=grad_scale)
+    label = mx.sym.Variable(name + '_softmax_label')
+    return mx.sym.SoftmaxOutput(data=fc1, label=label, name=name + '_softmax', grad_scale=grad_scale)
 
 
 def resnet(units, num_stages, filter_list, num_classes, image_shape,
