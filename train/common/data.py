@@ -185,16 +185,22 @@ class CategoricalImageRecordIter:
         cate1_dict, cate2_dict, cate3_dict = get_category_dict()
         self._cate3_dict = cate3_dict
 
+    def __next__(self):
+        return self.next()
+
     def next(self):
         if self._rec_iter.iter_next():
             batch = self._rec_iter.next()
-            cate3_label = batch.label[0]
+            cate3_label = batch.label[0].asnumpy()
             cate1_label = np.zeros(cate3_label.shape, dtype=np.float32)
             cate2_label = np.zeros(cate3_label.shape, dtype=np.float32)
             for i, x in enumerate(cate3_label):
                 cate1_label[i] = self._cate3_dict[int(x)]['cate1_class_id']
                 cate2_label[i] = self._cate3_dict[int(x)]['cate2_class_id']
-            batch.label = [cate1_label, cate2_label, cate3_label]
+            batch.label = [mx.nd.array(cate1_label, ctx=mx.Context('cpu_pinned', 0)),
+                           mx.nd.array(cate2_label, ctx=mx.Context('cpu_pinned', 0)),
+                           mx.nd.array(cate3_label, ctx=mx.Context('cpu_pinned', 0))
+                           ]
             batch.provide_label = self.provide_label
             return batch
         else:
