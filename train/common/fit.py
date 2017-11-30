@@ -181,9 +181,13 @@ def fit(args, network, data_loader, **kwargs):
     # evaluation metrices
     label_names = args.label_name.split(',')
     output_names = [x.replace('_label', '_output') for x in label_names]
-    eval_metrics = [mx.metric.Accuracy(name='cate1_acc', output_names=[output_names[0]], label_names=[label_names[0]]),
-                    mx.metric.Accuracy(name='cate2_acc', output_names=[output_names[1]], label_names=[label_names[1]]),
-                    mx.metric.Accuracy(name='cate3_acc', output_names=[output_names[2]], label_names=[label_names[2]])]
+    if args.categorical:
+        eval_metrics = [mx.metric.Accuracy(name='cate1_acc', output_names=[output_names[0]], label_names=[label_names[0]]),
+                        mx.metric.Accuracy(name='cate2_acc', output_names=[output_names[1]], label_names=[label_names[1]]),
+                        mx.metric.Accuracy(name='cate3_acc', output_names=[output_names[2]], label_names=[label_names[2]])]
+    else:
+        eval_metrics = [mx.metric.Accuracy(name='cate1_acc', output_names=[output_names[0]], label_names=[label_names[0]])]
+
     if args.top_k > 0:
         eval_metrics.append(mx.metric.create('top_k_accuracy', top_k=args.top_k))
     eval_metrics.append(mx.metric.create('ce'))
