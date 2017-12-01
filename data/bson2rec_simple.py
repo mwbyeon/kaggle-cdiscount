@@ -9,6 +9,7 @@ import logging
 import coloredlogs
 coloredlogs.install(level=logging.INFO)
 
+from joblib import Parallel, delayed
 import cv2
 import numpy as np
 import mxnet as mx
@@ -71,6 +72,23 @@ def read_images(args):
                 yield item  # id, img_bytes, label
 
 
+def stitch_product(prod):
+    product_id = prod.get('_id')
+    category_id = prod.get('category_id', None)  # This won't be in Test data
+    images = prod.get('imgs')
+
+    images = prod.get('imgs')
+    decoded = [cv2.imdecode(np.fromstring(images[x % len(images)]['picture'], np.uint8), cv2.IMREAD_COLOR) for x in
+               range(4)]
+    stitched = np.zeros((360, 360, 3), dtype=decoded[0].dtype)
+    stitched[:180, :180, :] = decoded[0]
+    stitched[180:, :180, :] = decoded[1]
+    stitched[:180, 180:, :] = decoded[2]
+    stitched[180:, 180:, :] = decoded[3]
+    img_bytes = cv2.imencode('.png', stitched)[1].tostring()
+    return category_id, img_bytes
+
+
 def read_products(args):
     cate1_dict, cate2_dict, cate3_dict = get_category_dict()
 
@@ -79,22 +97,24 @@ def read_products(args):
     data = bson.decode_file_iter(open(args.bson, 'rb'))
 
     idx = 0
-    for i, prod in tqdm(enumerate(data), unit='products', total=total_count):
-        product_id = prod.get('_id')
-        category_id = prod.get('category_id', None)  # This won't be in Test data
-        images = prod.get('imgs')
-
-        decoded = [cv2.imdecode(np.fromstring(images[x % len(images)]['picture'], np.uint8), cv2.IMREAD_COLOR) for x in range(4)]
-        stitched = np.zeros((360, 360, 3), dtype=decoded[0].dtype)
-        stitched[:180, :180, :] = decoded[0]
-        stitched[180:, :180, :] = decoded[1]
-        stitched[:180, 180:, :] = decoded[2]
-        stitched[180:, 180:, :] = decoded[3]
-        img_bytes = cv2.imencode('.png', stitched)[1].tostring()
-        class_id = cate3_dict[category_id]['cate3_class_id']
-        item = (idx, img_bytes, class_id)
-        idx += 1
-        yield item  # id, img_bytes, label
+    batch = []
+    with Parallel(n_jobs=-1) as parallel:
+        for i, prod in tqdm(enumerate(data), unit='products', total=total_count):
+            batch.append(prod)
+            if len(batch) > 256:
+                processed = parallel(delayed(stitch_product)(x) for x in batch)
+                for category_id, img_bytes in processed:
+                    class_id = cate3_dict[category_id]['cate3_class_id']
+                    item = (idx, img_bytes, class_id)
+                    idx += 1
+                    yield item  # id, img_bytes, label
+                batch = []
+        processed = parallel(delayed(stitch_product)(x) for x in batch)
+        for category_id, img_bytes in processed:
+            class_id = cate3_dict[category_id]['cate3_class_id']
+            item = (idx, img_bytes, class_id)
+            idx += 1
+            yield item  # id, img_bytes, label
 
 
 def main(args):
@@ -106,7 +126,7 @@ def main(args):
     count = 0
     random.seed(args.random_seed)
     images_buf = []
-    for item in tqdm(globals()[args.func](args), unit='images'):
+    for item in globals()[args.func](args):
         header = mx.recordio.IRHeader(0, item[2], item[0], 0)
         rec = mx.recordio.pack(header, item[1])
         images_buf.append(rec)
