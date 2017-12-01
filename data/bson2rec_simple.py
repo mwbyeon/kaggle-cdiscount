@@ -142,7 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
     parser.add_argument('--unique-md5', action='store_true')
     parser.add_argument('--under-sampling', type=int, default=99999999)
-    parser.add_argument('--func', type=str)
+    parser.add_argument('--func', type=str, default='read_images')
     args = parser.parse_args()
 
     main(args)
