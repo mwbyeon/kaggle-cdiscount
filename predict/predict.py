@@ -391,7 +391,7 @@ def _func_processor(args):
                 img_flip = cv2.flip(img, flipCode=1)
                 images.append((_hwc_to_chw(img_flip), product_id, img_bytes))
             if args.multi_view >= 2:  # 0.781000 (+0.0001)
-                img_crop = cv2.resize(img[10:img.rows-10, 10:img.cols-10, :], data_shape[1:])
+                img_crop = cv2.resize(img[5:-5, 5:-5, :], tuple(data_shape[1:]))
                 images.append((_hwc_to_chw(img_crop), product_id, img_bytes))
             if args.multi_view >= 3:  # 0.781700 (+0.0007)
                 img_flip = cv2.flip(img, flipCode=0)
