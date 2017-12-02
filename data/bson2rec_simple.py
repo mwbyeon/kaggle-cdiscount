@@ -95,7 +95,7 @@ def _func_reader(args):
 
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PUSH)
-    zmq_socket.set_hwm(1)
+    zmq_socket.set_hwm(0)
     zmq_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port))
     logging.info('_func_reader started')
 
@@ -113,12 +113,12 @@ def _func_reader(args):
 def _func_proc(args):
     context = zmq.Context()
     zmq_socket = context.socket(zmq.PULL)
-    zmq_socket.set_hwm(1)
+    zmq_socket.set_hwm(0)
     zmq_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port))
     logging.info('processor started')
 
     ext_socket = context.socket(zmq.PUSH)
-    ext_socket.set_hwm(1)
+    ext_socket.set_hwm(0)
     ext_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
 
     while True:
@@ -134,7 +134,7 @@ def read_products(args):
 
     context = zmq.Context()
     ext_socket = context.socket(zmq.PULL)
-    ext_socket.set_hwm(1)
+    ext_socket.set_hwm(0)
     ext_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
     logging.info('read_products started (port: {port})'.format(port=args.zmq_port+1))
 
