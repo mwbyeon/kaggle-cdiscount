@@ -144,7 +144,7 @@ def read_products(args):
     proc_reader.start()
     [x.start() for x in proc_processors]
 
-    total_count = None  # utils.get_bson_count(args.bson)
+    total_count = utils.get_bson_count(args.bson)
     bar = tqdm(total=total_count, unit='products')
     idx = 0
     term_count = 0
