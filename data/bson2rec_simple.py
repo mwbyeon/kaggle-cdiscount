@@ -138,13 +138,14 @@ def read_products(args):
     ext_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
     logging.info('read_products started (port: {port})'.format(port=args.zmq_port+1))
 
+    total_count = utils.get_bson_count(args.bson)
+
     proc_reader = Process(target=_func_reader, args=(args,))
     proc_processors = [Process(target=_func_proc, args=(args,)) for _ in range(args.num_procs)]
 
     proc_reader.start()
     [x.start() for x in proc_processors]
 
-    total_count = utils.get_bson_count(args.bson)
     bar = tqdm(total=total_count, unit='products')
     idx = 0
     term_count = 0
