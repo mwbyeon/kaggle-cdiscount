@@ -341,7 +341,7 @@ class ProductDataIter(mx.io.DataIter):
             batch_label = mx.nd.empty(self.provide_label[0][1])
             i = 0
             _t1 = time.time()
-            while i < self._batch_size and self._curr < self._num_products:
+            while i < self._batch_size:
                 idx = self._perm[self._curr % self._num_products]
                 prod = self._products[idx]
                 self._product_socket.send_pyobj(prod)
