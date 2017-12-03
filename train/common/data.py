@@ -382,7 +382,7 @@ def get_product_iter(args, kv=None):
                             rand_mirror=args.random_mirror,
                             num_procs=args.data_nthreads,
                             shuffle_product=True,
-                            shuffle_image=False,
+                            shuffle_image=True,
                             )
     val = ProductDataIter(bson_path=args.data_val,
                           batch_size=args.batch_size,
