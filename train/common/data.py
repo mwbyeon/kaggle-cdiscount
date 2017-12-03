@@ -3,13 +3,20 @@
 
 import os
 import sys
+import time
+import logging
+from multiprocessing import Process
 
 import mxnet as mx
 from mxnet.io import DataBatch, DataIter, DataDesc
 import numpy as np
+import zmq
+import bson
+from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data.category import get_category_dict
+from data import utils
 
 
 def add_data_args(parser):
@@ -235,3 +242,91 @@ class CategoricalImageRecordIter(mx.io.DataIter):
 def get_categorical_rec_iter(args, kv=None):
     train, val = get_rec_iter(args, kv)
     return CategoricalImageRecordIter(train), CategoricalImageRecordIter(val)
+
+
+class ProductDataIter(mx.io.DataIter):
+    def __init__(self, bson_path, batch_size, data_shape,
+                 data_name='data', label_name='softmax_label',
+                 rand_crop=False, rand_mirror=False,
+                 num_procs=1, shuffle=False):
+        super(ProductDataIter, self).__init__()
+        cate1_dict, cate2_dict, cate3_dict = get_category_dict()
+
+        self._shuffle = shuffle
+        self._rand_crop = rand_crop
+        self._rand_mirror = rand_mirror
+        self._batch_size = batch_size
+        self._data_shape = data_shape
+        self._num_procs = num_procs
+
+        self._products = []
+        self._num_products = 0
+        total_count = None  # utils.get_bson_count(bson_path)
+        with open(bson_path, 'rb') as reader:
+            logging.info(f'load bson: {bson_path} ({total_count})')
+            data = bson.decode_file_iter(reader)
+            for idx, prod in tqdm(enumerate(data), unit='products', total=total_count):
+                product_id = prod.get('_id')
+                category_id = prod.get('category_id', None)  # This won't be in Test data
+                images = prod.get('imgs')
+                class_id = cate3_dict[category_id]['cate3_class_id']
+                self._products.append((idx, [x['picture']for x in images], class_id))
+                self._num_products += 1
+                if self._num_products > 10000:
+                    break
+            logging.info(f'ready {self._num_products} products')
+
+        self._perm = np.arange(self._num_products)
+        self._curr = 0
+
+        self.provide_data = [(data_name, (batch_size,) + data_shape)]
+        self.provide_label = [(label_name, (batch_size,))]
+        self.reset()
+
+    def reset(self):
+        self._curr = 0
+        if self._shuffle:
+            np.random.shuffle(self._perm)
+
+    def next(self):
+        if self._curr < self._num_products:
+            batch_data = mx.nd.empty(self.provide_data[0][1])
+            batch_label = mx.nd.empty(self.provide_label[0][1])
+            i = 0
+            while i < self._batch_size and self._curr < self._num_products:
+                idx, images, class_id = self._products[self._perm[self._curr]]
+                image_array = [mx.img.imdecode(x, to_rgb=1) for x in images]
+                concat = mx.nd.concat(*[mx.nd.transpose(image_array[i % len(image_array)], axes=(2, 0, 1)) for i in range(4)], dim=0)
+                batch_data[i] = concat
+                batch_label[i] = class_id
+                self._curr += 1
+                i += 1
+            return DataBatch(data=[batch_data], label=[batch_label], pad=i-self._batch_size)
+        else:
+            raise StopIteration
+
+
+def get_product_iter(args, kv=None):
+    data_shape = tuple([int(l) for l in args.image_shape.split(',')])
+
+    train = ProductDataIter(bson_path=args.data_train,
+                            batch_size=args.batch_size,
+                            data_shape=data_shape,
+                            data_name=args.data_name,
+                            label_name=args.label_name,
+                            rand_crop=True,
+                            rand_mirror=True,
+                            num_procs=args.data_nthreads,
+                            shuffle=True,
+                            )
+    val = ProductDataIter(bson_path=args.data_val,
+                          batch_size=args.batch_size,
+                          data_shape=data_shape,
+                          data_name=args.data_name,
+                          label_name=args.label_name,
+                          rand_crop=False,
+                          rand_mirror=False,
+                          num_procs=args.data_nthreads,
+                          shuffle=False,
+                          )
+    return train, val

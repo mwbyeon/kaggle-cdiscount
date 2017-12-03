@@ -181,7 +181,7 @@ def fit(args, network, data_loader, **kwargs):
     # evaluation metrices
     label_names = args.label_name.split(',')
     output_names = [x.replace('_label', '_output') for x in label_names]
-    if args.categorical:
+    if args.data_iter == 'categorical':
         eval_metrics = [mx.metric.Accuracy(name='cate1_acc', output_names=[output_names[0]], label_names=[label_names[0]]),
                         mx.metric.Accuracy(name='cate2_acc', output_names=[output_names[1]], label_names=[label_names[1]]),
                         mx.metric.Accuracy(name='cate3_acc', output_names=[output_names[2]], label_names=[label_names[2]])]
