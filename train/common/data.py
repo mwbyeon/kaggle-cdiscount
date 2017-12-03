@@ -306,8 +306,6 @@ class ProductDataIter(mx.io.DataIter):
                 class_id = cate3_dict[category_id]['cate3_class_id']
                 self._products.append((idx, [x['picture'] for x in images], class_id))
                 self._num_products += 1
-                if self._num_products > 10000:
-                    break
             logging.info(f'ready {self._num_products} products')
 
         self._perm = np.arange(self._num_products)
@@ -341,10 +339,10 @@ class ProductDataIter(mx.io.DataIter):
         if self._curr < self._num_products:
             batch_data = mx.nd.empty(self.provide_data[0][1])
             batch_label = mx.nd.empty(self.provide_label[0][1])
-            i= 0
+            i = 0
             _t1 = time.time()
             while i < self._batch_size and self._curr < self._num_products:
-                idx = self._perm[self._curr]
+                idx = self._perm[self._curr % self._num_products]
                 prod = self._products[idx]
                 self._product_socket.send_pyobj(prod)
                 self._curr += 1
@@ -356,6 +354,7 @@ class ProductDataIter(mx.io.DataIter):
                 batch_label[j] = label
             _t2 = time.time()
             # logging.info('batch {:d}: {:.3f}sec'.format(i, _t2 - _t1))
+            # TODO: pad is not working while training
             return DataBatch(data=[batch_data], label=[batch_label], pad=self._batch_size-i)
         else:
             raise StopIteration
