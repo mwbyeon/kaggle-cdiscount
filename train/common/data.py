@@ -6,6 +6,7 @@ import sys
 import time
 import logging
 from multiprocessing import Process
+import random
 
 import cv2
 import mxnet as mx
@@ -251,7 +252,7 @@ def _hwc_to_chw(img):
     return img_chw
 
 
-def _func_product(product_socket_port, data_socket_port):
+def _func_product(product_socket_port, data_socket_port, random_flip=False, image_shuffle=False):
     context = zmq.Context()
     product_socket = context.socket(zmq.PULL)
     product_socket.set_hwm(0)
@@ -265,6 +266,7 @@ def _func_product(product_socket_port, data_socket_port):
 
     while True:
         '''
+        # opencv version
         idx, images, class_id = product_socket.recv_pyobj()
         image_array = [cv2.imdecode(np.fromstring(x, np.uint8), cv2.IMREAD_COLOR) for x in images]
         data = np.concatenate([_hwc_to_chw(image_array[i % len(image_array)]) for i in range(4)])
@@ -273,7 +275,11 @@ def _func_product(product_socket_port, data_socket_port):
 
         idx, images, class_id = product_socket.recv_pyobj()
         image_array = [mx.img.imdecode(x, to_rgb=1) for x in images]
-        data = mx.nd.concat(*[mx.nd.transpose(image_array[i % len(image_array)], axes=(2, 0, 1)) for i in range(4)], dim=0)
+        data_array = [mx.nd.transpose(mx.nd.flip(image_array[i % len(image_array)], axis=1) if random_flip and random.random() < 0.5 else image_array[i % len(image_array)],
+                                      axes=(2, 0, 1)) for i in range(4)]
+        if image_shuffle:
+            random.shuffle(data_array)
+        data = mx.nd.concat(*data_array, dim=0)
         data_socket.send_pyobj((data, class_id))
 
 
@@ -281,12 +287,13 @@ class ProductDataIter(mx.io.DataIter):
     def __init__(self, bson_path, batch_size, data_shape,
                  data_name='data', label_name='softmax_label',
                  rand_crop=False, rand_mirror=False,
-                 num_procs=1, shuffle=False):
+                 num_procs=1, shuffle_product=False, shuffle_image=False):
         super(ProductDataIter, self).__init__()
         cate1_dict, cate2_dict, cate3_dict = get_category_dict()
         self._cate3_dict = cate3_dict
 
-        self._shuffle = shuffle
+        self._shuffle_product = shuffle_product
+        self._shuffle_image = shuffle_image
         self._rand_crop = rand_crop
         self._rand_mirror = rand_mirror
         self._batch_size = batch_size
@@ -326,13 +333,16 @@ class ProductDataIter(mx.io.DataIter):
         self._data_socket_port = self._data_socket.bind_to_random_port(addr='tcp://0.0.0.0')
         logging.info('start data socket (port: {port})'.format(port=self._data_socket_port))
 
-        proc_processors = [Process(target=_func_product, args=(self._product_socket_port, self._data_socket_port))
+        proc_processors = [Process(target=_func_product, args=(self._product_socket_port,
+                                                               self._data_socket_port,
+                                                               self._rand_mirror,
+                                                               self._shuffle_image))
                            for _ in range(num_procs)]
         [x.start() for x in proc_processors]
 
     def reset(self):
         self._curr = 0
-        if self._shuffle:
+        if self._shuffle_product:
             np.random.shuffle(self._perm)
 
     def next(self):
@@ -369,9 +379,10 @@ def get_product_iter(args, kv=None):
                             data_name=args.data_name,
                             label_name=args.label_name,
                             rand_crop=True,
-                            rand_mirror=True,
+                            rand_mirror=False,
                             num_procs=args.data_nthreads,
-                            shuffle=True,
+                            shuffle_product=True,
+                            shuffle_image=False,
                             )
     val = ProductDataIter(bson_path=args.data_val,
                           batch_size=args.batch_size,
@@ -381,6 +392,7 @@ def get_product_iter(args, kv=None):
                           rand_crop=False,
                           rand_mirror=False,
                           num_procs=args.data_nthreads,
-                          shuffle=False,
+                          shuffle_product=False,
+                          shuffle_image=False,
                           )
     return train, val
