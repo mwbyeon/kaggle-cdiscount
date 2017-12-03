@@ -7,6 +7,7 @@ import time
 import logging
 from multiprocessing import Process
 
+import cv2
 import mxnet as mx
 from mxnet.io import DataBatch, DataIter, DataDesc
 import numpy as np
@@ -244,6 +245,38 @@ def get_categorical_rec_iter(args, kv=None):
     return CategoricalImageRecordIter(train), CategoricalImageRecordIter(val)
 
 
+def _hwc_to_chw(img):
+    img_chw = np.swapaxes(img, 0, 2)
+    img_chw = np.swapaxes(img_chw, 1, 2)
+    return img_chw
+
+
+def _func_product(product_socket_port, data_socket_port):
+    context = zmq.Context()
+    product_socket = context.socket(zmq.PULL)
+    product_socket.set_hwm(0)
+    product_socket.connect(f'tcp://0.0.0.0:{product_socket_port}')
+    logging.info(f'connect product socket (port: {product_socket_port})')
+
+    data_socket = context.socket(zmq.PUSH)
+    data_socket.set_hwm(0)
+    data_socket.connect(f'tcp://0.0.0.0:{data_socket_port}')
+    logging.info(f'connect data socket (port: {data_socket_port})')
+
+    while True:
+        '''
+        idx, images, class_id = product_socket.recv_pyobj()
+        image_array = [cv2.imdecode(np.fromstring(x, np.uint8), cv2.IMREAD_COLOR) for x in images]
+        data = np.concatenate([_hwc_to_chw(image_array[i % len(image_array)]) for i in range(4)])
+        data_socket.send_pyobj((data, class_id))
+        '''
+
+        idx, images, class_id = product_socket.recv_pyobj()
+        image_array = [mx.img.imdecode(x, to_rgb=1) for x in images]
+        data = mx.nd.concat(*[mx.nd.transpose(image_array[i % len(image_array)], axes=(2, 0, 1)) for i in range(4)], dim=0)
+        data_socket.send_pyobj((data, class_id))
+
+
 class ProductDataIter(mx.io.DataIter):
     def __init__(self, bson_path, batch_size, data_shape,
                  data_name='data', label_name='softmax_label',
@@ -251,6 +284,7 @@ class ProductDataIter(mx.io.DataIter):
                  num_procs=1, shuffle=False):
         super(ProductDataIter, self).__init__()
         cate1_dict, cate2_dict, cate3_dict = get_category_dict()
+        self._cate3_dict = cate3_dict
 
         self._shuffle = shuffle
         self._rand_crop = rand_crop
@@ -270,7 +304,7 @@ class ProductDataIter(mx.io.DataIter):
                 category_id = prod.get('category_id', None)  # This won't be in Test data
                 images = prod.get('imgs')
                 class_id = cate3_dict[category_id]['cate3_class_id']
-                self._products.append((idx, [x['picture']for x in images], class_id))
+                self._products.append((idx, [x['picture'] for x in images], class_id))
                 self._num_products += 1
                 if self._num_products > 10000:
                     break
@@ -283,6 +317,21 @@ class ProductDataIter(mx.io.DataIter):
         self.provide_label = [(label_name, (batch_size,))]
         self.reset()
 
+        context = zmq.Context()
+        self._product_socket = context.socket(zmq.PUSH)
+        self._product_socket.set_hwm(0)
+        self._product_socket_port = self._product_socket.bind_to_random_port(addr='tcp://0.0.0.0')
+        logging.info('start product socket(port: {port})'.format(port=self._product_socket_port))
+
+        self._data_socket = context.socket(zmq.PULL)
+        self._data_socket.set_hwm(0)
+        self._data_socket_port = self._data_socket.bind_to_random_port(addr='tcp://0.0.0.0')
+        logging.info('start data socket (port: {port})'.format(port=self._data_socket_port))
+
+        proc_processors = [Process(target=_func_product, args=(self._product_socket_port, self._data_socket_port))
+                           for _ in range(num_procs)]
+        [x.start() for x in proc_processors]
+
     def reset(self):
         self._curr = 0
         if self._shuffle:
@@ -292,16 +341,22 @@ class ProductDataIter(mx.io.DataIter):
         if self._curr < self._num_products:
             batch_data = mx.nd.empty(self.provide_data[0][1])
             batch_label = mx.nd.empty(self.provide_label[0][1])
-            i = 0
+            i= 0
+            _t1 = time.time()
             while i < self._batch_size and self._curr < self._num_products:
-                idx, images, class_id = self._products[self._perm[self._curr]]
-                image_array = [mx.img.imdecode(x, to_rgb=1) for x in images]
-                concat = mx.nd.concat(*[mx.nd.transpose(image_array[i % len(image_array)], axes=(2, 0, 1)) for i in range(4)], dim=0)
-                batch_data[i] = concat
-                batch_label[i] = class_id
+                idx = self._perm[self._curr]
+                prod = self._products[idx]
+                self._product_socket.send_pyobj(prod)
                 self._curr += 1
                 i += 1
-            return DataBatch(data=[batch_data], label=[batch_label], pad=i-self._batch_size)
+
+            for j in range(i):
+                data, label = self._data_socket.recv_pyobj()
+                batch_data[j] = data
+                batch_label[j] = label
+            _t2 = time.time()
+            # logging.info('batch {:d}: {:.3f}sec'.format(i, _t2 - _t1))
+            return DataBatch(data=[batch_data], label=[batch_label], pad=self._batch_size-i)
         else:
             raise StopIteration
 
