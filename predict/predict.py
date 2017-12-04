@@ -170,7 +170,7 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
-                            p[class_id] = 1.0
+                            p[class_id] = 10.0
                         elif md5_type == 'majority':
                             p = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
@@ -201,6 +201,8 @@ def _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=
                         probs_dict[_id] += p
                     elif args.multi_view_mean == 'geometric':
                         probs_dict[_id] *= p
+                    elif args.multi_view_mean == 'max':
+                        probs_dict[_id] = np.maximum(probs_dict[_id], p)
                 else:
                     probs_dict[_id] = p
     return probs_dict
@@ -439,7 +441,7 @@ if __name__ == '__main__':
     parser.add_argument('--md5-dict-type', type=str, choices=['none', 'unique', 'majority', 'l1', 'l2', 'softmax'])
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--multi-view', type=int, default=0)
-    parser.add_argument('--multi-view-mean', type=str, choices=['arithmetic', 'geometric'], default='arithmetic')
+    parser.add_argument('--multi-view-mean', type=str, choices=['arithmetic', 'geometric', 'max'], default='arithmetic')
     parser.add_argument('--product-unique-md5', action='store_true')
 
     parser.add_argument('--mean-max-pooling', type=int, default=0)
