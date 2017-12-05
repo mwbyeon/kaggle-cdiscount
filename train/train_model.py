@@ -21,7 +21,7 @@ def load_symbol(symbol_path):
     return symbol
 
 
-def load_params(params_path):
+def load_params(params_path, ignore_arg_names=list()):
     if not os.path.exists(params_path):
         raise FileNotFoundError('not exists: {}'.format(params_path))
 
@@ -29,9 +29,9 @@ def load_params(params_path):
     save_dict = mx.nd.load(params_path)
     for k, v in save_dict.items():
         tp, name = k.split(':', 1)
-        if tp == 'arg':
+        if tp == 'arg' and name not in ignore_arg_names:
             arg_params[name] = v
-        if tp == 'aux':
+        if tp == 'aux' and name not in ignore_arg_names:
             aux_params[name] = v
     return arg_params, aux_params
 
@@ -64,7 +64,7 @@ def train(args):
         symbol = import_module('symbols.' + args.symbol).get_symbol(**vars(args))
 
     if os.path.exists(args.params):
-        arg_params, aux_params = load_params(args.params)
+        arg_params, aux_params = load_params(args.params, args.ignore_arg_names)
 
     if args.feature_layer:
         symbol, arg_params, aux_params = get_finetune_model(symbol, arg_params, aux_params, **vars(args))
@@ -99,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--feature-layer', type=str, default='', help='for fine-tuning')
     parser.add_argument('--smooth-alpha', type=float, default=0.0, help='label smoothing')
     parser.add_argument('--dropout-ratio', type=float, default=None, help='use dropout')
+    parser.add_argument('--ignore-arg-names', type=str, nargs='+')
 
     # arguments for ResNext
     parser.add_argument('--num-conv-groups', type=int, default=32)
