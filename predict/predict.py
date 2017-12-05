@@ -210,7 +210,7 @@ def _predict(probs_dict):
                     image_prob = prob
                 else:
                     image_prob += prob
-            image_prob /= len(image_prob)
+            image_prob /= len(image)
             if product_prob is None:
                 product_prob = image_prob
             else:
