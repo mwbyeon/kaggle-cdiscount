@@ -199,10 +199,11 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
     return probs_dict
 
 
-def _predict(probs_dict):
+def _predict(probs_dict, mode=0):
     result = dict()
     for product_id, prod in probs_dict.items():
         product_prob = None
+        images_prob = []
         for image_id, image in prod.items():
             image_prob = None
             for model_id, prob in image:
@@ -211,10 +212,44 @@ def _predict(probs_dict):
                 else:
                     image_prob += prob
             image_prob /= len(image)
-            if product_prob is None:
-                product_prob = image_prob
-            else:
-                product_prob *= image_prob
+            images_prob.append(image_prob)
+
+        if len(images_prob) == 1:
+            product_prob = images_prob[0]
+        else:
+            if mode == 0:
+                for prob in images_prob:
+                    if product_prob is None:
+                        product_prob = prob
+                    else:
+                        product_prob *= prob
+            elif mode == 1:
+                ss = np.sort(np.transpose(np.stack(images_prob)))
+                product_prob = ss[:, -1]
+            elif mode == 2:
+                ss = np.sort(np.transpose(np.stack(images_prob)))
+                product_prob = ss[:, -1] * ss[:, -2]
+            elif mode == 3:
+                ss = np.sort(np.transpose(np.stack(images_prob)))
+                product_prob = ss[:, -1] * ss[:, -2] * (ss[:, -3] if ss.shape[-1] >= 3 else 1.0)
+        result[product_id] = int(np.argmax(product_prob))
+    return result
+
+
+def _predict2(probs_dict):
+    result = dict()
+    for product_id, prod in probs_dict.items():
+        product_prob = None
+        images_prob = []
+        for image_id, image in prod.items():
+            image_prob = None
+            for model_id, prob in image:
+                if image_prob is None:
+                    image_prob = prob
+                else:
+                    image_prob += prob
+            image_prob /= len(image)
+            images_prob.append(image_prob)
         result[product_id] = int(np.argmax(product_prob))
     return result
 
@@ -293,7 +328,7 @@ def _func_predict(args):
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
             probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
-            preds_dict = _predict(probs_dict)
+            preds_dict = _predict(probs_dict, args.predict_mode)
             __t2 = time.time()
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
@@ -327,7 +362,7 @@ def _func_predict(args):
 
     __t1 = time.time()
     probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
-    preds_dict = _predict(probs_dict)
+    preds_dict = _predict(probs_dict, args.predict_mode)
     __t2 = time.time()
     for product_id, pred in preds_dict.items():
         if product_id in ground_truths:
@@ -460,6 +495,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--output', type=str, default='')
     parser.add_argument('--print-summary', action='store_true')
+
+    parser.add_argument('--predict-mode', type=int, default=0)
     args = parser.parse_args()
 
     assert len(args.params) == len(args.symbol)
