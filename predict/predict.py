@@ -170,7 +170,7 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
                             prob = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
-                            prob[class_id] = 10.0
+                            prob[class_id] = 1.0  # NOTE: 10.0?
                         elif md5_type == 'majority':
                             prob = np.zeros(probs.shape[1:])
                             most_label, most_count = md5_dict[h].most_common(1)[0]
