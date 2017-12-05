@@ -236,24 +236,6 @@ def _predict(probs_dict, mode=0):
     return result
 
 
-def _predict2(probs_dict):
-    result = dict()
-    for product_id, prod in probs_dict.items():
-        product_prob = None
-        images_prob = []
-        for image_id, image in prod.items():
-            image_prob = None
-            for model_id, prob in image:
-                if image_prob is None:
-                    image_prob = prob
-                else:
-                    image_prob += prob
-            image_prob /= len(image)
-            images_prob.append(image_prob)
-        result[product_id] = int(np.argmax(product_prob))
-    return result
-
-
 def _func_predict(args):
     # cate2cid, cid2cate = category_csv_to_dict(args.csv)
     cate1_dict, cate2_dict, cate3_dict = get_category_dict()
