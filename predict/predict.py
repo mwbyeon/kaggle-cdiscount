@@ -484,7 +484,6 @@ if __name__ == '__main__':
     parser.add_argument('--md5-dict-type', type=str, choices=['none', 'unique', 'majority', 'l1', 'l2', 'softmax'])
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--multi-view', type=int, default=0)
-    parser.add_argument('--multi-view-mean', type=str, choices=['arithmetic', 'geometric', 'max'], default='arithmetic')
     parser.add_argument('--product-unique-md5', action='store_true')
 
     parser.add_argument('--mean-max-pooling', type=int, default=0)

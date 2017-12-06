@@ -99,7 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--feature-layer', type=str, default='', help='for fine-tuning')
     parser.add_argument('--smooth-alpha', type=float, default=0.0, help='label smoothing')
     parser.add_argument('--dropout-ratio', type=float, default=None, help='use dropout')
-    parser.add_argument('--ignore-arg-names', type=str, nargs='+')
+    parser.add_argument('--ignore-arg-names', type=str, nargs='+', default=[])
 
     # arguments for ResNext
     parser.add_argument('--num-conv-groups', type=int, default=32)
