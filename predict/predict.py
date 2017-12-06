@@ -232,6 +232,22 @@ def _predict(probs_dict, mode=0):
             elif mode == 3:
                 ss = np.sort(np.transpose(np.stack(images_prob)))
                 product_prob = ss[:, -1] * ss[:, -2] * (ss[:, -3] if ss.shape[-1] >= 3 else 1.0)
+            elif mode == 10:
+                for prob in images_prob:
+                    if product_prob is None:
+                        product_prob = prob
+                    else:
+                        product_prob += prob
+            elif mode == 11:
+                ss = np.sort(np.transpose(np.stack(images_prob)))
+                product_prob = ss[:, -1]
+            elif mode == 12:
+                ss = np.sort(np.transpose(np.stack(images_prob)))
+                product_prob = ss[:, -1] + ss[:, -2]
+            elif mode == 13:
+                ss = np.sort(np.transpose(np.stack(images_prob)))
+                product_prob = ss[:, -1] + ss[:, -2] + (ss[:, -3] if ss.shape[-1] >= 3 else 1.0)
+
         result[product_id] = int(np.argmax(product_prob))
     return result
 
