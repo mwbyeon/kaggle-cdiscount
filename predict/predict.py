@@ -364,7 +364,7 @@ def _func_predict(args):
     __t2 = time.time()
     for product_id, pred in preds_dict.items():
         if product_id in ground_truths:
-            label = ground_truths[product_id]
+            label = ground_truths.get(product_id)
             catetory_count_dict[label] += 1
             if label == pred:  # correct
                 correct_count += 1
