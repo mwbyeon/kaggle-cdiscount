@@ -199,7 +199,7 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
     return probs_dict
 
 
-def _predict(probs_dict, mode=0):
+def _predict(probs_dict):
     result = dict()
     for product_id, prod in probs_dict.items():
         product_prob = None
@@ -277,27 +277,28 @@ def _func_predict(args):
     finished = False
     while not finished:
         images = ext_socket.recv_pyobj()
+        pad_forward = False
         if images is None:
+            images = []
             term_count += 1
             if term_count == args.num_procs:
                 finished = True
-            continue
-
-        pad_forward = False
-        if len(images) + len(batch_ids) <= args.batch_size:
-            for img, product_id, image_id, image_raw in images:
-                batch_data[len(batch_ids)] = img
-                batch_ids.append((product_id, image_id))
-                batch_raw.append(image_raw)
-            product_count += 1
-            bar.update(n=1)
+                pad_forward = True
         else:
-            pad_forward = True
+            if len(images) + len(batch_ids) <= args.batch_size:
+                for img, product_id, image_id, image_raw in images:
+                    batch_data[len(batch_ids)] = img
+                    batch_ids.append((product_id, image_id))
+                    batch_raw.append(image_raw)
+                product_count += 1
+                bar.update(n=1)
+            else:
+                pad_forward = True
 
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
             probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
-            preds_dict = _predict(probs_dict, args.predict_mode)
+            preds_dict = _predict(probs_dict)
             __t2 = time.time()
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
@@ -328,29 +329,6 @@ def _func_predict(args):
                 product_count += 1
                 bar.update(n=1)
             __t0 = time.time()
-
-    __t1 = time.time()
-    probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
-    preds_dict = _predict(probs_dict, args.predict_mode)
-    __t2 = time.time()
-    for product_id, pred in preds_dict.items():
-        if product_id in ground_truths:
-            label = ground_truths.get(product_id)
-            catetory_count_dict[label] += 1
-            if label == pred:  # correct
-                correct_count += 1
-                correct_count_dict[label] += 1
-            else:
-                incorrect_count_dict[label][pred] += 1
-        if writer:
-            cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
-            writer.write('{0:d},{1:d}\n'.format(product_id, cate_id))
-            writer.flush()
-    __t3 = time.time()
-    bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.3f}/s)'.format(
-        product_count, correct_count / product_count,
-        __t1 - __t0, __t2 - __t1, __t3 - __t2, len(batch_ids) / (__t3 - __t0)))
-    bar.close()
 
     logging.info('tester finished (product_count:{0}, accuracy={1:.6f})'.format(
         product_count, correct_count / product_count))
