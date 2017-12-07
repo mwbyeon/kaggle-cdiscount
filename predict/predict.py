@@ -223,12 +223,33 @@ def _predict(probs_dict):
     return result
 
 
+def _md5_predict(images, cnt, cate3_counter):
+    # print( len(images), cnt.items() )
+    perfact_matches = []
+    for k, v in cnt.items():
+        if v >= len(images):
+            perfact_matches.append(k)
+    if perfact_matches:
+        return max(perfact_matches, key=lambda x: cate3_counter[x])
+
+    if len(cnt) == 1:
+        return list(cnt.keys())[0]
+
+    # bad result
+    # if len(cnt) > 0:
+    #     return max(cnt.keys(), key=lambda x: cate3_counter[x])
+    #     return cnt.most_common(1)[0][0]
+
+    return None
+
+
 def _func_predict(args):
     # cate2cid, cid2cate = category_csv_to_dict(args.csv)
     cate1_dict, cate2_dict, cate3_dict = get_category_dict()
 
     md5_dict = pickle.load(open(args.md5_dict_pkl, 'rb')) if args.md5_dict_pkl else None
     ground_truths = dict()
+    cate3_counter = Counter()
     with open(args.bson, 'rb') as reader:
         for d in bson.decode_file_iter(reader):
             prod_id = d.get('_id')
@@ -239,7 +260,9 @@ def _func_predict(args):
             if args.cate_level == 1:
                 ground_truths[prod_id] = cate1_dict[(cate1,)]['child_cate3'][cate_id]
             elif args.cate_level == 3:
-                ground_truths[prod_id] = cate3_dict[cate_id]['cate3_class_id']
+                cate3_class_id = cate3_dict[cate_id]['cate3_class_id']
+                ground_truths[prod_id] = cate3_class_id
+                cate3_counter[cate3_class_id] += 1
 
     logging.info('ground_truths: {}'.format(len(ground_truths)))
 
@@ -285,6 +308,32 @@ def _func_predict(args):
                 finished = True
                 pad_forward = True
         else:
+            # check md5 dict
+            if md5_dict:
+                cnt = Counter()
+                for img, product_id, image_id, image_raw in images:
+                    h = hashlib.md5(image_raw).hexdigest()
+                    for cate, _ in md5_dict.get(h, dict()).items():
+                        class_id = cate3_dict[cate]['cate3_class_id']
+                        cnt[class_id] += 1
+                pred = _md5_predict(images, cnt, cate3_counter)
+                if pred is not None:
+                    if product_id in ground_truths:
+                        label = ground_truths.get(product_id)
+                        catetory_count_dict[label] += 1
+                        if label == pred:  # correct
+                            correct_count += 1
+                            correct_count_dict[label] += 1
+                        else:
+                            incorrect_count_dict[label][pred] += 1
+                    if writer:
+                        cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
+                        writer.write('{0:d},{1:d}\n'.format(product_id, cate_id))
+                        writer.flush()
+                    product_count += 1
+                    bar.update(n=1)
+                    continue
+
             if len(images) + len(batch_ids) <= args.batch_size:
                 for img, product_id, image_id, image_raw in images:
                     batch_data[len(batch_ids)] = img
@@ -370,10 +419,12 @@ def _func_processor(args):
 
     while True:
         items = zmq_socket.recv_pyobj()
+        # logging.info('items: %s' % (None if items is None else len(items),))
         if items is None:
-            # logging.info('processor finished')
+            logging.info('processor finished')
             ext_socket.send_pyobj(None)
             return
+
         images = []
         for product_id, image_id, img_bytes in items:
             img = cv2.imdecode(np.fromstring(img_bytes, np.uint8), cv2.IMREAD_COLOR)
@@ -395,18 +446,18 @@ def _func_processor(args):
 
 
 def main(args):
-    proc_reader = Process(target=_func_reader, args=(args,))
     proc_predict = Process(target=_func_predict, args=(args,))
+    proc_reader = Process(target=_func_reader, args=(args,))
     proc_processors = [Process(target=_func_processor, args=(args,)) for _ in range(args.num_procs)]
 
     try:
-        proc_reader.start()
         proc_predict.start()
+        proc_reader.start()
         [x.start() for x in proc_processors]
 
-        proc_reader.join()
-        proc_predict.join()
         [x.join() for x in proc_processors]
+        proc_predict.join()
+        proc_reader.join()
     except KeyboardInterrupt:
         logging.warning('Keyboard Interrupted. Terminate all processes.')
         proc_reader.terminate()
