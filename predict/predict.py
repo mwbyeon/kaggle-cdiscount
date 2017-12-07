@@ -167,29 +167,29 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
                     h = hashlib.md5(batch_raw[i]).hexdigest()
                     if h in md5_dict:
                         if md5_type == 'unique' and len(md5_dict[h]) == 1:  # BEST!
-                            prob = np.full(probs.shape[1:], 0.1)
+                            prob = np.full(probs.shape[1:], 0.0)
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
-                            prob[class_id] = 0.9  # NOTE: 10.0?
+                            prob[class_id] = 1.0  # NOTE: 10.0?
                         elif md5_type == 'majority':
-                            prob = np.full(probs.shape[1:], 0.1)
+                            prob = np.full(probs.shape[1:], 0.0)
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
-                            prob[class_id] = 0.9
+                            prob[class_id] = 1.0
                         elif md5_type == 'l1':
-                            prob = np.zeros(probs.shape[1:])
+                            prob = np.full(probs.shape[1:], 0.0)
                             for cate, cnt in md5_dict[h].items():
                                 class_id = cate3_dict[cate]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
                                 prob[class_id] = cnt
                             prob /= sum(list(md5_dict[h].values()))
                         elif md5_type == 'l2':
-                            prob = np.zeros(probs.shape[1:])
+                            prob = np.full(probs.shape[1:], 0.0)
                             for cate, cnt in md5_dict[h].items():
                                 class_id = cate3_dict[cate]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
                                 prob[class_id] = cnt
                             prob /= np.linalg.norm(list(md5_dict[h].values()))
                         elif md5_type == 'softmax':
-                            prob = np.zeros(probs.shape[1:])
+                            prob = np.full(probs.shape[1:], 0.0)
                             for cate, cnt in md5_dict[h].items():
                                 class_id = cate3_dict[cate]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[cate]['cate3_class_id']
                                 prob[class_id] = cnt
@@ -223,18 +223,19 @@ def _predict(probs_dict):
     return result
 
 
-def _md5_predict(images, cnt, cate3_counter):
-    # print( len(images), cnt.items() )
-    perfact_matches = []
-    for k, v in cnt.items():
-        if v >= len(images):
-            perfact_matches.append(k)
+def _md5_predict(images, cnt, cate3_counter, mode=0):
+    if mode >= 1:
+        perfact_matches = []
+        for k, v in cnt.items():
+            if v >= len(images):
+                perfact_matches.append(k)
 
-    if perfact_matches:
-        return max(perfact_matches, key=lambda x: cate3_counter[x])
+        if perfact_matches:
+            return max(perfact_matches, key=lambda x: cate3_counter[x])
 
-    if len(cnt) == 1:
-        return list(cnt.keys())[0]
+    if mode >= 2:
+        if len(cnt) == 1:
+            return list(cnt.keys())[0]
 
     # bad result
     # if len(cnt) > 0:
@@ -317,7 +318,7 @@ def _func_predict(args):
                     for cate, _ in md5_dict.get(h, dict()).items():
                         class_id = cate3_dict[cate]['cate3_class_id']
                         cnt[class_id] += 1
-                pred = _md5_predict(images, cnt, cate3_counter)
+                pred = _md5_predict(images, cnt, cate3_counter, args.md5_mode)
                 if pred is not None:
                     if product_id in ground_truths:
                         label = ground_truths.get(product_id)
@@ -493,6 +494,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--output', type=str, default='')
     parser.add_argument('--print-summary', action='store_true')
+
+    parser.add_argument('--md5-mode', type=int, default=0)
     args = parser.parse_args()
 
     assert len(args.params) == len(args.symbol)
