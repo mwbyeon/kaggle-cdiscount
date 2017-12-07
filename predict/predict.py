@@ -167,15 +167,15 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
                     h = hashlib.md5(batch_raw[i]).hexdigest()
                     if h in md5_dict:
                         if md5_type == 'unique' and len(md5_dict[h]) == 1:  # BEST!
-                            prob = np.zeros(probs.shape[1:])
+                            prob = np.full(probs.shape[1:], 0.1)
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
-                            prob[class_id] = 1.0  # NOTE: 10.0?
+                            prob[class_id] = 0.9  # NOTE: 10.0?
                         elif md5_type == 'majority':
-                            prob = np.zeros(probs.shape[1:])
+                            prob = np.full(probs.shape[1:], 0.1)
                             most_label, most_count = md5_dict[h].most_common(1)[0]
                             class_id = cate3_dict[most_label]['cate1_sub_class_id'] if cate_level == 1 else cate3_dict[most_label]['cate3_class_id']
-                            prob[class_id] = 1.0
+                            prob[class_id] = 0.9
                         elif md5_type == 'l1':
                             prob = np.zeros(probs.shape[1:])
                             for cate, cnt in md5_dict[h].items():
@@ -229,6 +229,7 @@ def _md5_predict(images, cnt, cate3_counter):
     for k, v in cnt.items():
         if v >= len(images):
             perfact_matches.append(k)
+
     if perfact_matches:
         return max(perfact_matches, key=lambda x: cate3_counter[x])
 
@@ -436,12 +437,12 @@ def _func_processor(args):
             if args.multi_view >= 1:  # 0.780900 (+0.0020)
                 img_flip = cv2.flip(img, flipCode=1)
                 images.append((_hwc_to_chw(img_flip), product_id, image_id, img_bytes))
-            if args.multi_view >= 2:  # 0.781000 (+0.0001)
-                img_crop = cv2.resize(img[5:-5, 5:-5, :], tuple(data_shape[1:]))
-                images.append((_hwc_to_chw(img_crop), product_id, image_id, img_bytes))
-            if args.multi_view >= 3:  # 0.781700 (+0.0007)
+            if args.multi_view >= 2:  # 0.781700 (+0.0007)
                 img_flip = cv2.flip(img, flipCode=0)
                 images.append((_hwc_to_chw(img_flip), product_id, image_id, img_bytes))
+            if args.multi_view >= 3:  # 0.781000 (+0.0001)
+                img_crop = cv2.resize(img[5:-5, 5:-5, :], tuple(data_shape[1:]))
+                images.append((_hwc_to_chw(img_crop), product_id, image_id, img_bytes))
         ext_socket.send_pyobj(images)
 
 
