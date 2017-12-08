@@ -199,19 +199,32 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
     return probs_dict
 
 
-def _predict(probs_dict):
+def _predict(probs_dict, type, max_ensemble=99):
     result = dict()
     for product_id, prod in probs_dict.items():
         product_prob = None
         images_prob = []
         for image_id, image in prod.items():
             image_prob = None
-            for model_id, prob in image:
-                if image_prob is None:
-                    image_prob = prob
-                else:
-                    image_prob += prob
-            image_prob /= len(image)
+            if type == 0:
+                k = 0
+                for model_id, prob in image:
+                    if model_id >= max_ensemble: continue
+                    if image_prob is None:
+                        image_prob = prob
+                    else:
+                        image_prob += prob
+                    k += 1
+                image_prob /= k
+            elif type == 1:
+                k = 0
+                for model_id, prob in image:
+                    if model_id >= max_ensemble: continue
+                    if image_prob is None:
+                        image_prob = prob * 10
+                    else:
+                        image_prob *= prob * 10
+                    k += 1
             images_prob.append(image_prob)
 
         for prob in images_prob:
@@ -223,15 +236,15 @@ def _predict(probs_dict):
     return result
 
 
-def _md5_predict(images, cnt, cate3_counter, mode=0):
+def _md5_predict(images, cnt, cate3_counter, mode=2):
     if mode >= 1:
-        perfact_matches = []
+        perfect_matches = []
         for k, v in cnt.items():
             if v >= len(images):
-                perfact_matches.append(k)
+                perfect_matches.append(k)
 
-        if perfact_matches:
-            return max(perfact_matches, key=lambda x: cate3_counter[x])
+        if perfect_matches:
+            return max(perfect_matches, key=lambda x: cate3_counter[x])
 
     if mode >= 2:
         if len(cnt) == 1:
@@ -243,6 +256,13 @@ def _md5_predict(images, cnt, cate3_counter, mode=0):
     #     return cnt.most_common(1)[0][0]
 
     return None
+
+
+def _write(writer, product_id, pred, cate3_dict):
+    if writer:
+        cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
+        writer.write('{0:d},{1:d}\n'.format(product_id, cate_id))
+        writer.flush()
 
 
 def _func_predict(args):
@@ -289,6 +309,14 @@ def _func_predict(args):
     if writer:
         writer.write('_id,category_id\n')  # csv header
 
+    ensemble_writer = dict()
+    for k in range(1, len(testers)+1):
+        for t in [0, 1]:
+            w = open(args.output + f'.e{k}.t{t}', 'w') if args.output else None
+            if w:
+                w.write('_id,category_id\n')  # csv header
+                ensemble_writer[(k, t)] = w
+
     __t0 = time.time()
     batch_data = np.zeros(batch_shape)
     batch_ids, batch_raw = [], []
@@ -328,10 +356,9 @@ def _func_predict(args):
                             correct_count_dict[label] += 1
                         else:
                             incorrect_count_dict[label][pred] += 1
-                    if writer:
-                        cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
-                        writer.write('{0:d},{1:d}\n'.format(product_id, cate_id))
-                        writer.flush()
+                    _write(writer, product_id, pred, cate3_dict)
+                    for ew in ensemble_writer.values():
+                        _write(ew, product_id, pred, cate3_dict)
                     product_count += 1
                     bar.update(n=1)
                     continue
@@ -349,7 +376,13 @@ def _func_predict(args):
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
             probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
-            preds_dict = _predict(probs_dict)
+            for k in range(1, len(testers)+1):
+                for t in [0, 1]:
+                    preds_dict = _predict(probs_dict, t, k)
+                    for product_id, pred in preds_dict.items():
+                        _write(ensemble_writer[(k, t)], product_id, pred, cate3_dict)
+
+            preds_dict = _predict(probs_dict, 0)
             __t2 = time.time()
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
@@ -360,10 +393,7 @@ def _func_predict(args):
                         correct_count_dict[label] += 1
                     else:
                         incorrect_count_dict[label][pred] += 1
-                if writer:
-                    cate_id = cate3_dict[pred]['cate_id'] if args.cate_level == 3 else pred
-                    writer.write('{0:d},{1:d}\n'.format(product_id, cate_id))
-                    writer.flush()
+                _write(writer, product_id, pred, cate3_dict)
             __t3 = time.time()
             bar.write('[{0:8d}] acc={1:.6f} batch:{2:.3f}, forward:{3:.3f}, write:{4:.3f} ({5:.1f}images/s)'.format(
                 product_count, correct_count / product_count,
