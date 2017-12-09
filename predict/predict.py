@@ -19,6 +19,7 @@ import numpy as np
 import cv2
 import bson
 import zmq
+from numba import jit
 from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -199,49 +200,75 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
     return probs_dict
 
 
-def _predict(probs_dict, type, max_ensemble=99):
+def _predict(probs_dict, mean_type, max_ensemble, cate3_counter):
+    assert 0 < max_ensemble <= 8
     result = dict()
+    k = 0
+    maxv = []
     for product_id, prod in probs_dict.items():
         product_prob = None
         images_prob = []
         for image_id, image in prod.items():
             image_prob = None
-            if type == 0:
-                k = 0
+            if mean_type == 0:
+                n = 0
+                for model_id, prob in image:
+                    if model_id < max_ensemble:
+                        if image_prob is None:
+                            image_prob = np.copy(prob)
+                        else:
+                            image_prob = image_prob + prob
+                        n += 1
+                image_prob /= n
+            elif mean_type == 1:
+                n = 0
                 for model_id, prob in image:
                     if model_id >= max_ensemble: continue
                     if image_prob is None:
-                        image_prob = prob
+                        image_prob = np.copy(prob)
                     else:
-                        image_prob += prob
-                    k += 1
-                image_prob /= k
-            elif type == 1:
-                k = 0
+                        image_prob = image_prob + prob * prob
+                    n += 1
+                image_prob = (image_prob / n) ** (1 / 2)
+            elif mean_type == 2:
+                n = 0
                 for model_id, prob in image:
-                    if model_id >= max_ensemble: continue
-                    if image_prob is None:
-                        image_prob = prob * 10
-                    else:
-                        image_prob *= prob * 10
-                    k += 1
+                    if model_id < max_ensemble:
+                        if image_prob is None:
+                            image_prob = np.copy(prob)
+                        else:
+                            image_prob = image_prob + prob * prob * prob
+                        n += 1
+                image_prob = (image_prob / n) ** (1 / 3)
+            elif mean_type == 3:
+                n = 0
+                for model_id, prob in image:
+                    if model_id < max_ensemble:
+                        if image_prob is None:
+                            image_prob = np.copy(prob)
+                        else:
+                            image_prob = image_prob * prob
+                        n += 1
+                image_prob = image_prob ** (1 / n)
+
             images_prob.append(image_prob)
 
         for prob in images_prob:
             if product_prob is None:
-                product_prob = prob
+                product_prob = np.copy(prob)
             else:
-                product_prob *= prob
+                product_prob = product_prob * prob
         result[product_id] = int(np.argmax(product_prob))
+        maxv.append(np.max(product_prob))
     return result
 
 
-def _md5_predict(images, cnt, cate3_counter, mode=2):
+def _md5_predict(images, cnt, cate3_counter, mode=0):
     if mode >= 1:
         perfect_matches = []
-        for k, v in cnt.items():
-            if v >= len(images):
-                perfect_matches.append(k)
+        for _k, _v in cnt.items():
+            if _v >= len(images):
+                perfect_matches.append(_k)
 
         if perfect_matches:
             return max(perfect_matches, key=lambda x: cate3_counter[x])
@@ -310,12 +337,12 @@ def _func_predict(args):
         writer.write('_id,category_id\n')  # csv header
 
     ensemble_writer = dict()
-    for k in range(1, len(testers)+1):
-        for t in [0, 1]:
-            w = open(args.output + f'.e{k}.t{t}', 'w') if args.output else None
+    for _k in range(1, len(testers)+1):
+        for _t in range(4):
+            w = open(args.output + f'.e{_k}.t{_t}', 'w') if args.output else None
             if w:
                 w.write('_id,category_id\n')  # csv header
-                ensemble_writer[(k, t)] = w
+                ensemble_writer[(_k, _t)] = w
 
     __t0 = time.time()
     batch_data = np.zeros(batch_shape)
@@ -339,29 +366,29 @@ def _func_predict(args):
                 pad_forward = True
         else:
             # check md5 dict
-            if md5_dict:
-                cnt = Counter()
-                for img, product_id, image_id, image_raw in images:
-                    h = hashlib.md5(image_raw).hexdigest()
-                    for cate, _ in md5_dict.get(h, dict()).items():
-                        class_id = cate3_dict[cate]['cate3_class_id']
-                        cnt[class_id] += 1
-                pred = _md5_predict(images, cnt, cate3_counter, args.md5_mode)
-                if pred is not None:
-                    if product_id in ground_truths:
-                        label = ground_truths.get(product_id)
-                        catetory_count_dict[label] += 1
-                        if label == pred:  # correct
-                            correct_count += 1
-                            correct_count_dict[label] += 1
-                        else:
-                            incorrect_count_dict[label][pred] += 1
-                    _write(writer, product_id, pred, cate3_dict)
-                    for ew in ensemble_writer.values():
-                        _write(ew, product_id, pred, cate3_dict)
-                    product_count += 1
-                    bar.update(n=1)
-                    continue
+            # if md5_dict:
+            #     cnt = Counter()
+            #     for img, product_id, image_id, image_raw in images:
+            #         h = hashlib.md5(image_raw).hexdigest()
+            #         for cate, _ in md5_dict.get(h, dict()).items():
+            #             class_id = cate3_dict[cate]['cate3_class_id']
+            #             cnt[class_id] += 1
+            #     pred = _md5_predict(images, cnt, cate3_counter, args.md5_mode)
+            #     if pred is not None:
+            #         if product_id in ground_truths:
+            #             label = ground_truths.get(product_id)
+            #             catetory_count_dict[label] += 1
+            #             if label == pred:  # correct
+            #                 correct_count += 1
+            #                 correct_count_dict[label] += 1
+            #             else:
+            #                 incorrect_count_dict[label][pred] += 1
+            #         _write(writer, product_id, pred, cate3_dict)
+            #         for ew in ensemble_writer.values():
+            #             _write(ew, product_id, pred, cate3_dict)
+            #         product_count += 1
+            #         bar.update(n=1)
+            #         continue
 
             if len(images) + len(batch_ids) <= args.batch_size:
                 for img, product_id, image_id, image_raw in images:
@@ -376,14 +403,14 @@ def _func_predict(args):
         if pad_forward or len(batch_ids) == args.batch_size:
             __t1 = time.time()
             probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
-            for k in range(1, len(testers)+1):
-                for t in [0, 1]:
-                    preds_dict = _predict(probs_dict, t, k)
-                    for product_id, pred in preds_dict.items():
-                        _write(ensemble_writer[(k, t)], product_id, pred, cate3_dict)
-
-            preds_dict = _predict(probs_dict, 0)
             __t2 = time.time()
+            for _k in [len(testers)]:
+                for _t in range(4):
+                    preds_dict = _predict(probs_dict, _t, _k, cate3_counter)
+                    for product_id, pred in preds_dict.items():
+                        _write(ensemble_writer[(_k, _t)], product_id, pred, cate3_dict)
+
+            preds_dict = _predict(probs_dict, 0, len(testers), cate3_counter)
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
                     label = ground_truths.get(product_id)
@@ -463,21 +490,27 @@ def _func_processor(args):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             if args.resize > 0:
                 img = cv2.resize(img, (args.resize, args.resize), interpolation=cv2.INTER_CUBIC)
-            if args.multi_view >= 0:  # 0.778900
+            if args.multi_view >= 0:
                 images.append((_hwc_to_chw(img), product_id, image_id, img_bytes))
-            if args.multi_view >= 1:  # 0.780900 (+0.0020)
+            if args.multi_view >= 1:
                 img_flip = cv2.flip(img, flipCode=1)
                 images.append((_hwc_to_chw(img_flip), product_id, image_id, img_bytes))
-            if args.multi_view >= 2:  # 0.781700 (+0.0007)
+            if args.multi_view >= 2:
                 img_flip = cv2.flip(img, flipCode=0)
                 images.append((_hwc_to_chw(img_flip), product_id, image_id, img_bytes))
-            if args.multi_view >= 3:  # 0.781000 (+0.0001)
+            if args.multi_view >= 3:
                 img_crop = cv2.resize(img[5:-5, 5:-5, :], tuple(data_shape[1:]))
                 images.append((_hwc_to_chw(img_crop), product_id, image_id, img_bytes))
         ext_socket.send_pyobj(images)
 
 
 def main(args):
+    assert len(args.params) == len(args.symbol)
+
+    logging.info('Arguments')
+    for _k, _v in vars(args).items():
+        logging.info('  {}: {}'.format(_k, _v))
+
     proc_predict = Process(target=_func_predict, args=(args,))
     proc_reader = Process(target=_func_reader, args=(args,))
     proc_processors = [Process(target=_func_processor, args=(args,)) for _ in range(args.num_procs)]
@@ -527,12 +560,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--md5-mode', type=int, default=0)
     args = parser.parse_args()
-
-    assert len(args.params) == len(args.symbol)
-
-    logging.info('Arguments')
-    for k, v in vars(args).items():
-        logging.info('  {}: {}'.format(k, v))
 
     main(args)
 
