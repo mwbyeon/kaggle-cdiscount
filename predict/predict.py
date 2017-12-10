@@ -200,8 +200,8 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
     return probs_dict
 
 
-def _predict(probs_dict, mean_type, max_ensemble, cate3_counter):
-    assert 0 < max_ensemble <= 8
+def _predict(probs_dict, max_ensemble):
+    assert 0 < max_ensemble <= 14
     result = dict()
     k = 0
     maxv = []
@@ -210,47 +210,15 @@ def _predict(probs_dict, mean_type, max_ensemble, cate3_counter):
         images_prob = []
         for image_id, image in prod.items():
             image_prob = None
-            if mean_type == 0:
-                n = 0
-                for model_id, prob in image:
-                    if model_id < max_ensemble:
-                        if image_prob is None:
-                            image_prob = np.copy(prob)
-                        else:
-                            image_prob = image_prob + prob
-                        n += 1
-                image_prob /= n
-            elif mean_type == 1:
-                n = 0
-                for model_id, prob in image:
-                    if model_id >= max_ensemble: continue
+            n = 0
+            for model_id, prob in image:
+                if model_id < max_ensemble:
                     if image_prob is None:
                         image_prob = np.copy(prob)
                     else:
-                        image_prob = image_prob + prob * prob
+                        image_prob = image_prob + prob
                     n += 1
-                image_prob = (image_prob / n) ** (1 / 2)
-            elif mean_type == 2:
-                n = 0
-                for model_id, prob in image:
-                    if model_id < max_ensemble:
-                        if image_prob is None:
-                            image_prob = np.copy(prob)
-                        else:
-                            image_prob = image_prob + prob * prob * prob
-                        n += 1
-                image_prob = (image_prob / n) ** (1 / 3)
-            elif mean_type == 3:
-                n = 0
-                for model_id, prob in image:
-                    if model_id < max_ensemble:
-                        if image_prob is None:
-                            image_prob = np.copy(prob)
-                        else:
-                            image_prob = image_prob * prob
-                        n += 1
-                image_prob = image_prob ** (1 / n)
-
+                image_prob /= n
             images_prob.append(image_prob)
 
         for prob in images_prob:
@@ -338,11 +306,10 @@ def _func_predict(args):
 
     ensemble_writer = dict()
     for _k in range(1, len(testers)+1):
-        for _t in range(4):
-            w = open(args.output + f'.e{_k}.t{_t}', 'w') if args.output else None
-            if w:
-                w.write('_id,category_id\n')  # csv header
-                ensemble_writer[(_k, _t)] = w
+        w = open(args.output + f'.e{_k}', 'w') if args.output else None
+        if w:
+            w.write('_id,category_id\n')  # csv header
+            ensemble_writer[_k] = w
 
     __t0 = time.time()
     batch_data = np.zeros(batch_shape)
@@ -405,12 +372,11 @@ def _func_predict(args):
             probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
             __t2 = time.time()
             for _k in [len(testers)]:
-                for _t in range(4):
-                    preds_dict = _predict(probs_dict, _t, _k, cate3_counter)
-                    for product_id, pred in preds_dict.items():
-                        _write(ensemble_writer[(_k, _t)], product_id, pred, cate3_dict)
+                preds_dict = _predict(probs_dict, _k)
+                for product_id, pred in preds_dict.items():
+                    _write(ensemble_writer[_k], product_id, pred, cate3_dict)
 
-            preds_dict = _predict(probs_dict, 0, len(testers), cate3_counter)
+            preds_dict = _predict(probs_dict, len(testers))
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
                     label = ground_truths.get(product_id)
