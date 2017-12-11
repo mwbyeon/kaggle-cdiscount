@@ -200,11 +200,9 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
     return probs_dict
 
 
-def _predict(probs_dict, max_ensemble):
+def _predict(probs_dict, max_ensemble, mode=0):
     assert 0 < max_ensemble <= 14
     result = dict()
-    k = 0
-    maxv = []
     for product_id, prod in probs_dict.items():
         product_prob = None
         images_prob = []
@@ -218,16 +216,21 @@ def _predict(probs_dict, max_ensemble):
                     else:
                         image_prob = image_prob + prob
                     n += 1
-                image_prob /= n
+            image_prob /= n
             images_prob.append(image_prob)
 
         for prob in images_prob:
             if product_prob is None:
-                product_prob = np.copy(prob)
+                if mode == 0:
+                    product_prob = prob
+                else:
+                    product_prob = prob ** mode
             else:
-                product_prob = product_prob * prob
+                if mode == 0:
+                    product_prob = product_prob * prob
+                else:
+                    product_prob = product_prob + prob ** mode
         result[product_id] = int(np.argmax(product_prob))
-        maxv.append(np.max(product_prob))
     return result
 
 
@@ -305,11 +308,12 @@ def _func_predict(args):
         writer.write('_id,category_id\n')  # csv header
 
     ensemble_writer = dict()
-    for _k in range(1, len(testers)+1):
-        w = open(args.output + f'.e{_k}', 'w') if args.output else None
-        if w:
-            w.write('_id,category_id\n')  # csv header
-            ensemble_writer[_k] = w
+    for _k in args.ensembles:
+        for _m in range(4):
+            w = open(args.output + f'.e{_k}.m{_m}', 'w') if args.output else None
+            if w:
+                w.write('_id,category_id\n')  # csv header
+                ensemble_writer[(_k, _m)] = w
 
     __t0 = time.time()
     batch_data = np.zeros(batch_shape)
@@ -371,10 +375,12 @@ def _func_predict(args):
             __t1 = time.time()
             probs_dict = _do_forward(testers, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict, args.md5_dict_type, args.cate_level)
             __t2 = time.time()
-            for _k in [len(testers)]:
-                preds_dict = _predict(probs_dict, _k)
-                for product_id, pred in preds_dict.items():
-                    _write(ensemble_writer[_k], product_id, pred, cate3_dict)
+            if args.output:
+                for _k in args.ensembles:
+                    for _m in range(4):
+                        preds_dict = _predict(probs_dict, _k, _m)
+                        for product_id, pred in preds_dict.items():
+                            _write(ensemble_writer[(_k, _m)], product_id, pred, cate3_dict)
 
             preds_dict = _predict(probs_dict, len(testers))
             for product_id, pred in preds_dict.items():
@@ -522,6 +528,7 @@ if __name__ == '__main__':
     parser.add_argument('--fc-name', type=str, default='fc')
 
     parser.add_argument('--output', type=str, default='')
+    parser.add_argument('--ensembles', type=int, nargs='*', default=[])
     parser.add_argument('--print-summary', action='store_true')
 
     parser.add_argument('--md5-mode', type=int, default=0)
