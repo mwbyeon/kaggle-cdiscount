@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data.category import get_category_dict
+from data import utils
 
 
 Batch = namedtuple('Batch', ['data'])
@@ -201,7 +202,7 @@ def _do_forward(models, batch_data, batch_ids, batch_raw, cate3_dict, md5_dict=N
 
 
 def _predict(probs_dict, max_ensemble, mode=0):
-    assert 0 < max_ensemble <= 14
+    assert 0 < max_ensemble <= 22
     result = dict()
     for product_id, prod in probs_dict.items():
         product_prob = None
@@ -309,7 +310,7 @@ def _func_predict(args):
 
     ensemble_writer = dict()
     for _k in args.ensembles:
-        for _m in range(4):
+        for _m in range(2):
             w = open(args.output + f'.e{_k}.m{_m}', 'w') if args.output else None
             if w:
                 w.write('_id,category_id\n')  # csv header
@@ -324,7 +325,8 @@ def _func_predict(args):
     catetory_count_dict, correct_count_dict = Counter(), Counter()
     incorrect_count_dict = defaultdict(Counter)
 
-    bar = tqdm(total=len(ground_truths), unit='products')
+    total_count = utils.get_bson_count(args.bson)
+    bar = tqdm(total=total_count, unit='products')
     finished = False
     while not finished:
         images = ext_socket.recv_pyobj()
@@ -377,12 +379,12 @@ def _func_predict(args):
             __t2 = time.time()
             if args.output:
                 for _k in args.ensembles:
-                    for _m in range(4):
+                    for _m in range(2):
                         preds_dict = _predict(probs_dict, _k, _m)
                         for product_id, pred in preds_dict.items():
                             _write(ensemble_writer[(_k, _m)], product_id, pred, cate3_dict)
 
-            preds_dict = _predict(probs_dict, len(testers))
+            # preds_dict = _predict(probs_dict, len(testers))
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
                     label = ground_truths.get(product_id)
