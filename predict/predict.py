@@ -19,7 +19,6 @@ import numpy as np
 import cv2
 import bson
 import zmq
-from numba import jit
 from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -113,7 +112,7 @@ def category_csv_to_dict(category_csv):
     return cate2cid, cid2cate
 
 
-def read_images(bson_path, csv_path, cut=None):
+def read_images(bson_path, cut=None, product_unique_md5=False):
     with open(bson_path, 'rb') as reader:
         data = bson.decode_file_iter(reader)
 
@@ -128,7 +127,7 @@ def read_images(bson_path, csv_path, cut=None):
             for i, pic in enumerate(d['imgs']):
                 img_bytes = pic['picture']
                 h = hashlib.md5(img_bytes).hexdigest()
-                if args.product_unique_md5 and h in prod_md5_set:
+                if product_unique_md5 and h in prod_md5_set:
                     continue
                 prod_md5_set.add(h)
                 item = (product_id, i, img_bytes)
@@ -147,7 +146,7 @@ def _func_reader(args):
     logging.info('reader started (port: {port})'.format(port=args.zmq_port))
 
     product_count = 0
-    for items in read_images(args.bson, args.csv, args.cut):
+    for items in read_images(args.bson, args.cut, args.product_unique_md5):
         zmq_socket.send_pyobj(items)
         product_count += 1
 
