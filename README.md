@@ -23,7 +23,7 @@
   * create `.rec` files for training CNN models
     - assign unique `class_id`(0-based) to each category.
     - images in the same product are assigned same `class_id`.
-  * see `data/bson2rec_simple.py` and `data/bson2rec_trainval.sh`
+  * see `data/bson2rec_simple.py` and [data/bson2rec_trainval.sh](data/bson2rec_trainval.sh)
 
 #### Create different datasets
   * `DATASET_A`
