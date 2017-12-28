@@ -72,6 +72,34 @@
     * DPNs: https://arxiv.org/abs/1707.01629
     * DenseNet: https://arxiv.org/abs/1608.06993
 
+#### Hyper-parameters
+  * Batch Size: 512 (using 8-GPUs)
+  * Optimizer (in most cases)
+    * [NADAM](https://mxnet.incubator.apache.org/api/python/optimization.html#mxnet.optimizer.Nadam) 
+    (it's better than SGD, NAG and ADAM optimizer for this dataset)
+    
+    * learning rate
+      * 0.000100: 1~10 epochs
+      * 0.000020: 11~13 epochs
+      * 0.000004: 13~ epochs
+  * label smoothing
+    * smooth alpha: 0.1
+
+#### Data augmentation
+  * input: 180x180x3
+  * did not use random crop
+  * use only random flip (it's enough for training on 15~20 epochs)
+
+## Experiments
+#### dropout
+  * see [code](train/train_model.py#L48-L49) and [scripts/logs](train/experiments/dropout) for more details.
+#### input size of image
+
+#### label smoothing
+
+#### augmentation
+
+
 ## Predict
 #### Ensemble of images in a product
   * Arithmetic Mean (sum of probabilities of each images)
