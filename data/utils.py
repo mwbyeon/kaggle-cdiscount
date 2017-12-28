@@ -21,7 +21,7 @@ def encode_dict_list(products, output_bson_path, total=None, overwrite=False):
         logging.info('already exists ({})'.format(output_bson_path))
         return
 
-    logging.info('write {} products to {}'.format(len(products), output_bson_path))
+    logging.info('write {} products to {}'.format(total, output_bson_path))
     with open(output_bson_path, 'wb') as writer:
         for i, prod in tqdm(enumerate(products), unit='products', total=total or len(products), ascii=True):
             obj = bson._dict_to_bson(prod, False, bson.DEFAULT_CODEC_OPTIONS)
