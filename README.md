@@ -11,6 +11,15 @@
 
 ## Prepare data files for training
 
+#### Dataset Preview
+  * train.bson (58.2 GB)
+    * 5270 Categories
+    * 7,069,896 products, 12,371,293 images (each product contains between 1-4 images).
+    * imbalanced dataset
+    ![Cateogry Distribution](assets/category_distribution.png)
+  * test.bson (14.5GB)
+  * see https://www.kaggle.com/c/cdiscount-image-classification-challenge/data
+
 #### Split the BSON file to Training and Validation
   * split products in the `train.bson` to `train_train.bson` and `train_valid.bson`
     * randomly selected with seed
@@ -28,13 +37,13 @@
 #### Create different datasets
   * `DATASET_A`
     - split products to 0.95(training) : 0.05(validation)
-    - random seed: `0xC0FFEE`
+    - random seed: 12648430 (`0xC0FFEE`)
   * `DATASET_B`
     - split products to 0.95(training) : 0.05(validation)
-    - random seed: `0x1`
+    - random seed: 1 `0x1`
   * `DATASET_C`
     - split products to 0.95(training) : 0.05(validation)
-    - random seed: `0xC0FFEE`
+    - random seed: 12648430 (`0xC0FFEE`)
     - remove duplicated images from `DATASET_A` (it decrease training time)
 
 
@@ -52,7 +61,7 @@
     | M07 | ResNext-101-64x4d    | ImageNet-1k          | DATASET_A | 15     | 0.735808       |
     | M08 | DPNs-131             | ImageNet-1k          | DATASET_A | 18     | 0.736697       |
     | M09 | ResNext-101-64x4d    | ImggeNet-1k          | DATASET_B | 15     | 0.737427       |
-    | M10 | ResNext-101-64x4d    | ImageNet-1k          | DATASET_A | 19     | 0.738542       |
+    | M10 | ResNext-101          | ImageNet-1k          | DATASET_A | 19     | 0.738542       |
     | M11 | SE-ResNext-101-64x4d | M10                  | DATASET_A | 15     | 0.739272       |
     | M12 | DPNs-131             | ImageNet-1k          | DATASET_B | 17     | 0.742388       |
     | M13 | SE-ResNext-101-64x4d | M09                  | DATASET_B | 13     | 0.743221       |
@@ -76,6 +85,7 @@
 #### Accelerate prediction speed
   * needs multi-processing for faster prediction. but `multiprocessing.Queue` module is very slow.
   * I use **ZeroMQ**(https://github.com/zeromq/pyzmq) instead of `multiprocessing.Queue` for process communication.
+  * 
 
 ## Results
   * 
