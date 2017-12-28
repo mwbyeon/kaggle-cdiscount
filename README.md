@@ -1,4 +1,5 @@
 
+*I'm not fluent in English. Please let me know if I need to fix it.*
 
 # Kaggle Cdiscount’s Image Classification Challenge
   * 3rd place solution for Cdiscount’s Image Classification Challenge.
@@ -8,6 +9,7 @@
   * Python 3.6.2
   * MXNet 0.12.0 (GPU enabled)
   * and need GPU Machines as many as possible...
+  * run `$ pip install -r requirements` to install required packages.
 
 ## Prepare data files for training
 
@@ -75,9 +77,7 @@
 #### Hyper-parameters
   * Batch Size: 512 (using 8-GPUs)
   * Optimizer (in most cases)
-    * [NADAM](https://mxnet.incubator.apache.org/api/python/optimization.html#mxnet.optimizer.Nadam) 
-    (it's better than SGD, NAG and ADAM optimizer for this dataset)
-    
+    * [NADAM](https://mxnet.incubator.apache.org/api/python/optimization.html#mxnet.optimizer.Nadam) (it's better than SGD, NAG and ADAM optimizer for this dataset)
     * learning rate
       * 0.000100: 1~10 epochs
       * 0.000020: 11~13 epochs
@@ -99,7 +99,7 @@
   | **0.0**         | **0.788686**        | **0.693604**             |
   | 0.2             | 0.743764            | 0.689954                 |
 
-  * see [code](train/train_model.py#L48-L49) and [scripts/logs](train/experiments/dropout) for more details.
+  * see [train/train_model.py](train/train_model.py#L48-L49) and [scripts/logs](train/experiments/dropout) for more details.
 
 #### input size of image
   * The larger the image size, the higher the accuracy.
@@ -135,23 +135,29 @@
   | 180 x 180       | Flip + HSL | 0.774842   | 0.690422 |
   | 224 x 224 (NN)  | Flip       | 0.789405   | 0.695116 |
 
-  * see [code](train/common/data.py#L34-L57) and [scripts/logs](train/experiments/augmentation) for more details.
+  * see [train/common/data.py](train/common/data.py#L34-L57) and [scripts/logs](train/experiments/augmentation) for more details.
 
 
 ## Predict
 #### Ensemble of images in a product
   * Arithmetic Mean (sum of probabilities of each images)
+  * see [predict/predict.py]() and [script](predict/run_predict.sh)
 
 #### Ensemble of models
   * Arithmetic Mean (sum of probabilities of each models)
 
-#### Post-processing to improve accuracy
-  * use MD5 
+#### Post-processing to improve accuracy using MD5 hash of products
+  * calculate the hash of each products in the training set.
+  * the hash of the product is a set of md5 hash of each images.
+  * create a dictionary of (hash, category)
+  * for testing time, if exists same hash in the dictionary,
+    the category of this product is over-written by the dictionary.
+  * see [predict/md5_predict.py](predict/md5_predict.py)
+  * also you can implement this logic in the `predict.py`. 
 
 #### Accelerate prediction speed
   * needs multi-processing for faster prediction. but `multiprocessing.Queue` module is very slow.
   * I use **ZeroMQ**(https://github.com/zeromq/pyzmq) instead of `multiprocessing.Queue` for process communication.
-  * 
 
 ## Results (Kaggle Leaderboard)
   * https://www.kaggle.com/c/cdiscount-image-classification-challenge/leaderboard
