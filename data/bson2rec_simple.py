@@ -74,102 +74,6 @@ def read_images(args):
                 yield item  # id, img_bytes, label
 
 
-def stitch_product(prod):
-    product_id = prod.get('_id')
-    category_id = prod.get('category_id', None)  # This won't be in Test data
-    images = prod.get('imgs')
-    decoded = [cv2.imdecode(np.fromstring(images[x % len(images)]['picture'], np.uint8), cv2.IMREAD_COLOR) for x in
-               range(4)]
-    stitched = np.zeros((360, 360, 3), dtype=decoded[0].dtype)
-    stitched[:180, :180, :] = decoded[0]
-    stitched[180:, :180, :] = decoded[1]
-    stitched[:180, 180:, :] = decoded[2]
-    stitched[180:, 180:, :] = decoded[3]
-    img_bytes = cv2.imencode('.jpg', stitched)[1].tostring()
-    return category_id, img_bytes
-
-
-def _func_reader(args):
-    logging.info('read bson file: {}'.format(args.bson))
-    data = bson.decode_file_iter(open(args.bson, 'rb'))
-
-    context = zmq.Context()
-    zmq_socket = context.socket(zmq.PUSH)
-    zmq_socket.set_hwm(0)
-    zmq_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port))
-    logging.info('_func_reader started')
-
-    product_count = 0
-    for i, prod in enumerate(data):
-        zmq_socket.send_pyobj(prod)
-        product_count += 1
-
-    for _ in range(args.num_procs):
-        zmq_socket.send_pyobj(None)
-
-    logging.info('reader finished (product: {})'.format(product_count))
-
-
-def _func_proc(args):
-    context = zmq.Context()
-    zmq_socket = context.socket(zmq.PULL)
-    zmq_socket.set_hwm(0)
-    zmq_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port))
-    logging.info('processor started')
-
-    ext_socket = context.socket(zmq.PUSH)
-    ext_socket.set_hwm(0)
-    ext_socket.connect('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
-
-    while True:
-        prod = zmq_socket.recv_pyobj()
-        if prod is None:
-            ext_socket.send_pyobj(None)
-            return
-        ext_socket.send_pyobj(stitch_product(prod))
-
-
-def read_products(args):
-    cate1_dict, cate2_dict, cate3_dict = get_category_dict()
-
-    context = zmq.Context()
-    ext_socket = context.socket(zmq.PULL)
-    ext_socket.set_hwm(0)
-    ext_socket.bind('tcp://0.0.0.0:{port}'.format(port=args.zmq_port+1))
-    logging.info('read_products started (port: {port})'.format(port=args.zmq_port+1))
-
-    total_count = utils.get_bson_count(args.bson)
-
-    proc_reader = Process(target=_func_reader, args=(args,))
-    proc_processors = [Process(target=_func_proc, args=(args,)) for _ in range(args.num_procs)]
-
-    proc_reader.start()
-    [x.start() for x in proc_processors]
-
-    bar = tqdm(total=total_count, unit='products')
-    idx = 0
-    term_count = 0
-    finished = False
-    while not finished:
-        item = ext_socket.recv_pyobj()
-        if item is None:
-            term_count += 1
-            if term_count == args.num_procs:
-                finished = True
-            continue
-
-        category_id, img_bytes = item
-        class_id = cate3_dict[category_id]['cate3_class_id']
-        item = (idx, img_bytes, class_id)
-
-        bar.update(n=1)
-        idx += 1
-        yield item  # id, img_bytes, label
-
-    proc_reader.join()
-    [x.join() for x in proc_processors]
-
-
 def main(args):
     if os.path.exists(args.out_rec):
         raise FileExistsError(args.out_rec)
@@ -179,7 +83,7 @@ def main(args):
     count = 0
     random.seed(args.random_seed)
     images_buf = []
-    for item in globals()[args.func](args):
+    for item in read_images(args):
         header = mx.recordio.IRHeader(0, item[2], item[0], 0)
         rec = mx.recordio.pack(header, item[1])
         images_buf.append(rec)
@@ -216,7 +120,6 @@ if __name__ == '__main__':
     parser.add_argument('--random-seed', type=int, default=0xC0FFEE)
     parser.add_argument('--unique-md5', action='store_true')
     parser.add_argument('--under-sampling', type=int, default=99999999)
-    parser.add_argument('--func', type=str, default='read_images')
 
     parser.add_argument('--num-procs', type=int, default=1)
     parser.add_argument('--zmq-port', type=int, default=18300)

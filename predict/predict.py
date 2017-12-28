@@ -30,8 +30,7 @@ Batch = namedtuple('Batch', ['data'])
 
 
 class Tester(object):
-    def __init__(self, symbol_path, params_path, data_shape,
-                 mean_max_pooling=False, pool_name=None, fc_name=None, device_type='gpu', gpus='0'):
+    def __init__(self, symbol_path, params_path, data_shape, device_type='gpu', gpus='0'):
         self._data_shape = data_shape
         self._arg_params, self._aux_params = {}, {}
         save_dict = mx.nd.load(params_path)
@@ -42,43 +41,7 @@ class Tester(object):
             if tp == 'aux':
                 self._aux_params[name] = v
 
-        if mean_max_pooling:
-            # https://github.com/cypw/DPNs#mean-max-pooling
-            logging.info('Add Mean-Max Pooling Layer..')
-            sym_softmax = mx.symbol.load(symbol_path)
-            sym_pool, sym_fc = None, None
-            for x in sym_softmax.get_internals():
-                if x.name == pool_name:
-                    sym_pool = x
-                elif x.name == fc_name:
-                    sym_fc = x
-
-            if sym_pool is None or sym_fc is None:
-                logging.error([x.name for x in sym_softmax.get_internals()])
-                if sym_pool is None:
-                    raise ValueError('Cannot find output that matches name {}'.format(sym_pool))
-                if sym_fc is None:
-                    raise ValueError('Cannot find output that matches name {}'.format(sym_fc))
-
-            num_classes = sym_fc.attr('num_hidden')
-
-            sym = mx.symbol.Convolution(data=sym_pool, num_filter=num_classes, kernel=(1, 1), no_bias=False, name=fc_name)
-            fc_weight_name, fc_bias_name = fc_name + '_weight', fc_name + '_bias'
-            fc_weight, fc_bias = self._arg_params[fc_weight_name], self._arg_params[fc_bias_name]
-            self._arg_params[fc_weight_name] = fc_weight.reshape(fc_weight.shape + (1, 1))
-            self._arg_params[fc_bias_name] = fc_bias.reshape(fc_bias.shape)
-
-            mean_max_pooling_size = tuple([max(i // 32 - 6, 1) for i in data_shape[2:4]])
-
-            sym1 = mx.symbol.Flatten(data=mx.symbol.Pooling(
-                data=sym, global_pool=True, pool_type='avg', kernel=mean_max_pooling_size, stride=(1, 1), pad=(0, 0), name='out_pool1'))
-            sym2 = mx.symbol.Flatten(data=mx.symbol.Pooling(
-                data=sym, global_pool=True, pool_type='max', kernel=mean_max_pooling_size, stride=(1, 1), pad=(0, 0), name='out_pool2'))
-            sym = (sym1 + sym2) * 0.5
-            sym = mx.symbol.SoftmaxOutput(data=sym, name='softmax')
-            self._symbol = sym
-        else:
-            self._symbol = mx.symbol.load(symbol_path)
+        self._symbol = mx.symbol.load(symbol_path)
 
         ctx = [mx.gpu(int(x)) for x in gpus.split(',')] if device_type == 'gpu' else mx.cpu()
 
@@ -293,9 +256,7 @@ def _func_predict(args):
     testers = []
     for symbol, params in zip(args.symbol, args.params):
         logging.info('load: {}'.format(symbol))
-        testers.append(Tester(symbol, params, batch_shape,
-                              mean_max_pooling=args.mean_max_pooling, pool_name=args.pool_name, fc_name=args.fc_name,
-                              gpus=args.gpus))
+        testers.append(Tester(symbol, params, batch_shape, gpus=args.gpus))
 
     context = zmq.Context()
     ext_socket = context.socket(zmq.PULL)
@@ -337,31 +298,6 @@ def _func_predict(args):
                 finished = True
                 pad_forward = True
         else:
-            # check md5 dict
-            # if md5_dict:
-            #     cnt = Counter()
-            #     for img, product_id, image_id, image_raw in images:
-            #         h = hashlib.md5(image_raw).hexdigest()
-            #         for cate, _ in md5_dict.get(h, dict()).items():
-            #             class_id = cate3_dict[cate]['cate3_class_id']
-            #             cnt[class_id] += 1
-            #     pred = _md5_predict(images, cnt, cate3_counter, args.md5_mode)
-            #     if pred is not None:
-            #         if product_id in ground_truths:
-            #             label = ground_truths.get(product_id)
-            #             catetory_count_dict[label] += 1
-            #             if label == pred:  # correct
-            #                 correct_count += 1
-            #                 correct_count_dict[label] += 1
-            #             else:
-            #                 incorrect_count_dict[label][pred] += 1
-            #         _write(writer, product_id, pred, cate3_dict)
-            #         for ew in ensemble_writer.values():
-            #             _write(ew, product_id, pred, cate3_dict)
-            #         product_count += 1
-            #         bar.update(n=1)
-            #         continue
-
             if len(images) + len(batch_ids) <= args.batch_size:
                 for img, product_id, image_id, image_raw in images:
                     batch_data[len(batch_ids)] = img
@@ -383,7 +319,7 @@ def _func_predict(args):
                         for product_id, pred in preds_dict.items():
                             _write(ensemble_writer[(_k, _m)], product_id, pred, cate3_dict)
 
-            # preds_dict = _predict(probs_dict, len(testers))
+            preds_dict = _predict(probs_dict, len(testers))
             for product_id, pred in preds_dict.items():
                 if product_id in ground_truths:
                     label = ground_truths.get(product_id)
@@ -523,10 +459,6 @@ if __name__ == '__main__':
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--multi-view', type=int, default=0)
     parser.add_argument('--product-unique-md5', action='store_true')
-
-    parser.add_argument('--mean-max-pooling', type=int, default=0)
-    parser.add_argument('--pool-name', type=str, default='pool1')
-    parser.add_argument('--fc-name', type=str, default='fc')
 
     parser.add_argument('--output', type=str, default='')
     parser.add_argument('--ensembles', type=int, nargs='*', default=[])

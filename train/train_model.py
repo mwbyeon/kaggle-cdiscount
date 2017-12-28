@@ -11,7 +11,7 @@ coloredlogs.install(level=logging.INFO, milliseconds=True)
 
 import mxnet as mx
 
-from train.common import data, fit, modelzoo
+from train.common import data, fit
 
 
 def load_symbol(symbol_path):
@@ -69,18 +69,9 @@ def train(args):
     if args.feature_layer:
         symbol, arg_params, aux_params = get_finetune_model(symbol, arg_params, aux_params, **vars(args))
 
-    if args.data_iter == 'image':
-        data_loader = data.get_rec_iter
-    elif args.data_iter == 'categorical':
-        data_loader = data.get_categorical_rec_iter
-    elif args.data_iter == 'product':
-        data_loader = data.get_product_iter
-    else:
-        raise ValueError(f'invalid data_iter: {args.data_iter}')
-
     fit.fit(args=args,
             network=symbol,
-            data_loader=data_loader,
+            data_loader=data.get_rec_iter,
             arg_params=arg_params,
             aux_params=aux_params)
 
@@ -107,9 +98,6 @@ if __name__ == '__main__':
     # arguments for SENets
     parser.add_argument('--use-squeeze-excitation', action='store_true')
     parser.add_argument('--excitation-ratio', type=float, default=1/16)
-
-    # data iterator
-    parser.add_argument('--data-iter', type=str, choices=['image', 'categorical', 'product'], default='image')
 
     # for squeeze-and-excitation
     args = parser.parse_args()
