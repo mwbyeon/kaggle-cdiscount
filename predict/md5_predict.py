@@ -11,9 +11,6 @@ import bson
 import coloredlogs
 coloredlogs.install(level=logging.INFO)
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from predict.predict import read_images
-
 
 def main(args):
     # logging.info('loading md5 dict...')
