@@ -3,7 +3,8 @@
 
 # Kaggle Cdiscount’s Image Classification Challenge
   * 3rd place solution for Cdiscount’s Image Classification Challenge.
-  * https://www.kaggle.com/c/cdiscount-image-classification-challenge
+  * competition: https://www.kaggle.com/c/cdiscount-image-classification-challenge
+  * code: https://github.com/mwbyeon/kaggle-cdiscount
 
 ## Prerequisite
   * Python 3.6.2
@@ -219,4 +220,4 @@
   * https://www.kaggle.com/c/cdiscount-image-classification-challenge/leaderboard
 
 ## Appendix
-  * see [this slide](assets/Kaggle_Cdiscount_Image_Classification.pdf) for more details.
+  * see [this slide](Kaggle_Cdiscount_Image_Classification.pdf) for more details.
