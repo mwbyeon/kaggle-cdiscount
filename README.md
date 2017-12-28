@@ -49,7 +49,14 @@
     - remove duplicated images from `DATASET_A` (it can reduce training time)
 
 
-## Train CNN Models
+## Training
+
+#### Download pre-trained models
+  * DenseNet: https://github.com/liuzhuang13/DenseNet
+  * DPNs: https://github.com/cypw/DPNs
+  * ResNext: http://data.mxnet.io/models/imagenet/resnext/
+
+#### Train CNN models
   * trained 14 CNN models
   
     | No. | network              | transfer from        | dataset   | epochs | single val-acc |
@@ -69,10 +76,15 @@
     | M13 | SE-ResNext-101-64x4d | M09                  | DATASET_B | 13     | 0.743221       |
     | M14 | DPNs-107             | ImageNet-1k (Link)   | DATASET_A | 20     | 0.743781       |
 
-    * ResNext: https://arxiv.org/abs/1611.05431
-    * SE-ResNext: https://arxiv.org/abs/1709.01507
-    * DPNs: https://arxiv.org/abs/1707.01629
-    * DenseNet: https://arxiv.org/abs/1608.06993
+    * you can see training scripts and logs in [train](train) directory.
+    * script files may not work due to code changes. 
+
+    * References
+      * ResNext: https://arxiv.org/abs/1611.05431
+      * SE-ResNext: https://arxiv.org/abs/1709.01507
+      * DPNs: https://arxiv.org/abs/1707.01629
+      * DenseNet: https://arxiv.org/abs/1608.06993
+    
 
 #### Hyper-parameters
   * Batch Size: 512 (using 8-GPUs)
