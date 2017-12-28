@@ -34,16 +34,16 @@
   * create `.rec` files for training CNN models
     - assign unique `class_id`(0-based) to each category.
     - images in the same product are assigned same `class_id`.
-  * see [data/bson2rec_simple.py](data/bson2rec_simple.py) and [data/run_bson2rec_trainval.sh](data/run_bson2rec_trainval.sh)
+  * see [data/bson2rec_simple.py](data/bson2rec_simple.py)
 
 #### Create different datasets
-  * `DATASET_A`
+  * `DATASET_A`: [data/create_dataset_A.sh](data/create_dataset_A.sh)
     - split products to 0.95(training) : 0.05(validation)
     - random seed: 12648430 (`0xC0FFEE`)
-  * `DATASET_B`
+  * `DATASET_B`: [data/create_dataset_B.sh](data/create_dataset_B.sh)
     - split products to 0.95(training) : 0.05(validation)
     - random seed: 1 `0x1`
-  * `DATASET_C`
+  * `DATASET_C`: [data/create_dataset_C.sh](data/create_dataset_C.sh)
     - split products to 0.95(training) : 0.05(validation)
     - random seed: 12648430 (`0xC0FFEE`)
     - remove duplicated images from `DATASET_A` (it can reduce training time)
@@ -175,7 +175,7 @@
   * compute the MD5 hash of each products in the training set.
     the hash of the product is a set of md5 hash of each images in the same product.
   * create a dictionary of (hash, category) pairs
-  * for creating MD5 hash dictionary, see [precict/create_train_md5_dict.sh](create_train_md5_dict.sh).
+  * for creating MD5 hash dictionary, see [data/create_train_md5_dict.sh](data/create_train_md5_dict.sh).
 
 #### Predict a probability of images using MD5 dictionary
   * during inference time,
