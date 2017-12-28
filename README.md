@@ -6,7 +6,7 @@
 
 ## Prerequisite
   * Python 3.6.2
-  * MXNet 0.12 ()
+  * MXNet 0.12.0 (GPU enabled)
   * and need GPU Machines as many as possible...
 
 ## Prepare data files for training
@@ -44,7 +44,7 @@
   * `DATASET_C`
     - split products to 0.95(training) : 0.05(validation)
     - random seed: 12648430 (`0xC0FFEE`)
-    - remove duplicated images from `DATASET_A` (it decrease training time)
+    - remove duplicated images from `DATASET_A` (it can reduce training time)
 
 
 ## Train CNN Models
@@ -87,5 +87,8 @@
   * I use **ZeroMQ**(https://github.com/zeromq/pyzmq) instead of `multiprocessing.Queue` for process communication.
   * 
 
-## Results
-  * 
+## Results (Kaggle Leaderboard)
+  * https://www.kaggle.com/c/cdiscount-image-classification-challenge/leaderboard
+
+## Appendix
+  * see [this slide](assets/Kaggle_Cdiscount_Image_Classification.pdf) for more details.
