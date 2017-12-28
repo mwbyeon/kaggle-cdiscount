@@ -92,7 +92,7 @@
 
 ## Experiments
 #### dropout
-  * did not use dropout after GAP layer
+  * did not use dropout after GAP(Global Average Pooling) layer in such as ResNext, SE-ResNext
   
   |  Dropout Ratio  | Local Train (Top-1) | Local Validation (Top-1) |
   |-----------------|---------------------|--------------------------|
@@ -123,6 +123,7 @@
   | **0.1**          | **0.779468**  | **0.694035** |
   | 0.2          | 0.770593  | 0.692766 |
 
+  * paper: https://arxiv.org/abs/1512.00567
   * see [code](train/train_model.py#L52) and [scripts/logs](train/experiments/label_smoothing) for more details.
 
 #### augmentation
@@ -139,25 +140,68 @@
 
 
 ## Predict
+#### Testing Time Augmentation
+  * use original image and flipped image
+  * more augmentation(crop, flop, transpose) reduces accuracy.
+  * compute arithmetic mean for the probability of a image
+  * see [predict/predict.py]()
+
 #### Ensemble of images in a product
-  * Arithmetic Mean (sum of probabilities of each images)
+  * use arithmetic mean (sum of probabilities of each images)
   * see [predict/predict.py]() and [script](predict/run_predict.sh)
 
 #### Ensemble of models
-  * Arithmetic Mean (sum of probabilities of each models)
+  * use arithmetic mean (sum of probabilities of each models)
+
+#### number of inferences for single image
+  * M: number of models for ensemble
+  * K: TTA(Testing Time Augmentation)
+  * need (M * K) inferences to compute the probability of single image
+
+#### Create a dictionary of MD5 Hash
+  * compute the MD5 hash of each images in the training set.
+  * compute the MD5 hash of each products in the training set.
+    the hash of the product is a set of md5 hash of each images in the same product.
+  * create a dictionary of (hash, category) pairs
+  * for creating MD5 hash dictionary, see [precict/create_train_md5_dict.sh](create_train_md5_dict.sh).
+
+#### Predict a probability of images using MD5 dictionary
+  * during inference time,
+    if the hash of a image exists in the dictionary,
+    the probability of a image is set to one-hot vector. 
+  * after using this method,
+    * 0.77100 -> 0.77429 (+0.00329, Private LB)
+    * 0.75890 -> 0.76259 (+0.00369, Private LB)
+    * 0.75604 -> 0.76083 (+0.00479, Private LB)
+  * if same image/product have multiple category → confused...
+  * see [predict/predict.py](predict/predict.py#L133-L161) for details.
 
 #### Post-processing to improve accuracy using MD5 hash of products
-  * calculate the hash of each products in the training set.
-  * the hash of the product is a set of md5 hash of each images.
-  * create a dictionary of (hash, category)
-  * for testing time, if exists same hash in the dictionary,
-    the category of this product is over-written by the dictionary.
-  * see [predict/md5_predict.py](predict/md5_predict.py)
-  * also you can implement this logic in the `predict.py`. 
+  * after inference time,
+    if the hash of a product exists in the dictionary,
+    category of this product is overwritten by the category in the dictionary.
+  * after using this method,
+    * 0.78998 -> 0.79046 (+0.00048, Private LB)
+  * see [predict/md5_predict.py](predict/md5_predict.py) for more details.
+  * also you can implement this logic in the `predict.py`.
 
-#### Accelerate prediction speed
-  * needs multi-processing for faster prediction. but `multiprocessing.Queue` module is very slow.
+#### Accelerate pre-processing
+  * needs multi-processing for fast pre-processing. but `multiprocessing.Queue` module is very slow.
   * I use **ZeroMQ**(https://github.com/zeromq/pyzmq) instead of `multiprocessing.Queue` for process communication.
+
+
+#### Ensembles
+  
+   | Ensembles | Models | Private LB | Public LB |
+   |-----------|--------|------------|-----------| 
+   | 1         | M14    | 0.76713    | 0.76544   |
+   | 2         | M5, M7 | 0.77429    | 0.77282   |
+   | 4         | M11~M14 | 0.78693   | 0.78490   |
+   | 8         | M06~M14 | 0.78775   | 0.78577   |
+   | 11        | M04~M14 | 0.78879   | 0.78673   |
+   | 14        | M01~M14 | 0.78998   | 0.78813   |
+   | 14        | M01~M14 (with post-processing using MD5) | 0.79046 | 0.78861 | 
+
 
 ## Results (Kaggle Leaderboard)
   * https://www.kaggle.com/c/cdiscount-image-classification-challenge/leaderboard
