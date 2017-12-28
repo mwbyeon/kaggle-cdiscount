@@ -92,12 +92,50 @@
 
 ## Experiments
 #### dropout
+  * did not use dropout after GAP layer
+  
+  |  Dropout Ratio  | Local Train (Top-1) | Local Validation (Top-1) |
+  |-----------------|---------------------|--------------------------|
+  | **0.0**         | **0.788686**        | **0.693604**             |
+  | 0.2             | 0.743764            | 0.689954                 |
+
   * see [code](train/train_model.py#L48-L49) and [scripts/logs](train/experiments/dropout) for more details.
+
 #### input size of image
+  * The larger the image size, the higher the accuracy.
+  * However, I used 180x180 because the larger the image size, the slower the learning.
+  
+  | image size | train-acc | valid-acc | training speed |
+  |------------|-----------|-----------|----------------|
+  | 160 x 160  | 0.753975  | 0.678730  | 1130/sec       |
+  | **180 x 180**  | **0.750308**  | **0.680361**  | **872/sec**        |
+  | 192 x 192  | 0.751713  | 0.680706  | 884/sec        |
+  | 224 x 224  | 0.748252  | 0.681723  | 647/sec        |
+  
+  * see [scripts/logs](train/experiments/image_size) for more details.
 
 #### label smoothing
+  * Label smoothing(`0.1`) increases accuracy.
+
+  | Smooth alpha | train-acc | val-acc  |
+  |--------------|-----------|----------|
+  | 0.0          | 0.785019  | 0.691917 |
+  | **0.1**          | **0.779468**  | **0.694035** |
+  | 0.2          | 0.770593  | 0.692766 |
+
+  * see [code](train/train_model.py#L52) and [scripts/logs](train/experiments/label_smoothing) for more details.
 
 #### augmentation
+  * Just flip is enough.
+
+  | Input Size      | Option     | train-acc  | val-acc  |
+  |-----------------|------------|------------|----------|
+  | 180 x 180       | No Aug.    | 0.862802   | 0.688090 |
+  | **180 x 180**       | **Flip**       | **0.787349**   | **0.692491** |
+  | 180 x 180       | Flip + HSL | 0.774842   | 0.690422 |
+  | 224 x 224 (NN)  | Flip       | 0.789405   | 0.695116 |
+
+  * see [code](train/common/data.py#L34-L57) and [scripts/logs](train/experiments/augmentation) for more details.
 
 
 ## Predict
