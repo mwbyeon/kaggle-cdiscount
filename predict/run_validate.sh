@@ -18,7 +18,7 @@ python3 -u ${ROOT}/predict/predict.py \
     --gpus              0,1,2,3,4,5,6,7 \
     --num-procs         24 \
     --cate-level        3 \
-    --md5-dict-pkl      /home/deploy/dylan/projects/kaggle-cdiscount/data/train_split_train_md5.pkl \
+    --md5-dict-pkl      ${ROOT}/data/train_split_train_md5.pkl \
     --md5-dict-type     unique \
     --multi-view        1 \
     --multi-view-mean   geometric \

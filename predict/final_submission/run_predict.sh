@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-ROOT=/home/deploy/dylan/projects/kaggle-cdiscount
+ROOT=/home/deploy/dylan/projects/temp/kaggle-cdiscount
 
 # create prediction output
 python3 -u ${ROOT}/predict/predict.py \
     --zmq-port      18400 \
-    --bson          /home/deploy/dylan/dataset/cdiscount/test.bson \
-    --csv           /home/deploy/dylan/dataset/cdiscount/category_names.csv \
+    --bson          ${ROOT}/data/test.bson \
+    --csv           ${ROOT}/data/category_names.csv \
     --params        ${ROOT}/train/M14/dpn107-0020.params \
                     ${ROOT}/train/M13/se-resnext-101-64x4d-seed1-0013.params \
                     ${ROOT}/train/M12/dpn131-seed1-0017.params \
@@ -39,7 +39,7 @@ python3 -u ${ROOT}/predict/predict.py \
     --data-shape    3,180,180 \
     --gpus          0,1,2,3,4,5,6,7 \
     --num-procs     24 \
-    --md5-dict-pkl  /home/deploy/dylan/projects/kaggle-cdiscount/data/train_md5_dict.pkl \
+    --md5-dict-pkl  ${ROOT}/data/train_md5_dict.pkl \
     --md5-dict-type unique \
     --md5-mode      0 \
     --multi-view    1 \
