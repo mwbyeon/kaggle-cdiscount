@@ -63,7 +63,7 @@ tornado==4.5.2
 tqdm==4.17.1
 traitlets==4.3.2
 treelib==1.4.0
-urllib3==1.22
+urllib3>=1.23
 wcwidth==0.1.7
 webencodings==0.5.1
 widgetsnbextension==3.0.3
