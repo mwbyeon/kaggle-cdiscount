@@ -44,7 +44,7 @@ prompt-toolkit==1.0.15
 protobuf==3.4.0
 ptyprocess==0.5.2
 pybktree==1.1
-Pygments==2.2.0
+Pygments==2.7.4
 pymongo==3.5.1
 python-dateutil==2.6.1
 pytz==2017.2
