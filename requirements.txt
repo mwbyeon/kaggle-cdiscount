@@ -33,7 +33,7 @@ notebook>=5.4.1
 numba==0.36.1
 numpy==1.13.1
 olefile==0.44
-opencv-python==3.3.0.10
+opencv-python==3.4.0.12
 pandas==0.20.3
 pandocfilters==1.4.2
 parso==0.1.0
